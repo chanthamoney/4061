@@ -22,27 +22,59 @@ void show_error_message(char * ExecName);
 void show_targets(target_t targets[], int nTargetCount);
 
 int build(target_t target, target_t targets[], int nTargetCount) {
-	if (target.DependencyCount != 0)
-	{
-	int pid;
 
-	pid = fork();
+	// What if input does not exist.
+	// does_file_exist(file);
+	// DO LATER.
 
-	if (pid==0) {
-		printf("Building!\n");
-		int idx = find_target(target.DependencyNames[0], targets, nTargetCount);
-		build(targets[idx], targets, nTargetCount);
-		exit(0);
+	if (target.DependencyCount != 0) {
+		int pid;
+
+		for (int i=0; i<target.DependencyCount; i++) {
+			pid = fork();
+
+			if (pid==0) {
+				int timeStamp = compare_modification_time(target.TargetName, target.DependencyNames[i]);
+				int idx = find_target(target.DependencyNames[i], targets, nTargetCount);
+
+
+				if(timeStamp == -1)
+				{
+					printf("File missing: ");
+					// Build file.
+					build(targets[idx], targets, nTargetCount);
+				}
+				else if(timeStamp == 0)
+				{
+					printf("Same time: ");
+					// File is the same. Don't build.
+				}
+				else if(timeStamp == 1)
+				{
+					printf("Target is modified later than the input file: ");
+					// Build file.
+					build(targets[idx], targets, nTargetCount);
+				}
+				else {
+					printf("Target is modified earlier than input file: ");
+					// Do not build.
+				}
+
+
+				exit(0);
+			}
+
+			if (pid<0) {
+				exit(-1);
+			}
+
+			wait(&pid);
+		}
 	}
 
-	if (pid < 0) {
-		exit(-1);
-	}
-
-	wait(&pid);
-	printf("Success!\n");
-	}
-
+	char* args[] = {"echo", target.Command, NULL};
+	printf("%s\n", target.TargetName);
+	execvp("echo", args);
 	return 0;
 }
 /*-------------------------------------------------------END OF HELPER FUNCTIONS PROTOTYPES--------------------------*/
@@ -179,8 +211,19 @@ int main(int argc, char *argv[])
 	printf("Makefile name: %s\n", Makefile);
 	printf("# of Targets: %d\n", nTargetCount);
 	printf("-----------------------------------\n");
-  for (int i=0; i<nTargetCount; i++) { // Loop through the targets and build them.
-		build(targets[i], targets, nTargetCount);
+	int pid;
+	for (int i=0; i<nTargetCount; i++) { // Loop through the targets and build them.
+		pid = fork();
+
+		if (pid<0) {
+			exit(-1);
+		}
+		if (pid==0) {
+			build(targets[i], targets, nTargetCount);
+			exit(0);
+		}
+
+		wait(&pid);
 	}
 
   /*End of your code*/
