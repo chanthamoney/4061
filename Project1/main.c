@@ -20,6 +20,34 @@
 void show_error_message(char * ExecName);
 //Write your functions prototypes here
 void show_targets(target_t targets[], int nTargetCount);
+void updateTimeStamp(target_t* target, target_t target[]);
+
+
+	// TODO: Update status of all targets, based on their timestamps.
+void updateTimeStamp(target_t* target, target_t target[]){
+		char* inputFile
+		char* target;
+		int modificationTime = compare_modification_time(inputFile, target);
+
+		if(modificationTime == -1)
+		{
+			return -1; //There is not an existing file.
+		}
+		if(modificationTime == 0)
+		{
+			return 0; //both files have same timestamps
+		}
+		else if(modificationTime == 1)
+		{
+			return 1; //Means the input file was modified later than the target
+		}
+		else{
+			return 2; //Means the input file was modified earlier than the target
+		}
+
+
+
+}
 
 int build(target_t * target, target_t targets[], int nTargetCount) {
 	// Recursion loop to build the dependencies of the target.
@@ -31,9 +59,27 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 				return -1;
 			}
 
+			int modificationTime = compare_modification_time(targets[idx].TargetName, targets[idx].DependencyNames[i]);
+
+			if (modificationTime==-1) {
+				int success = does_file_exist(targets[idx].DependencyNames[i]);
+				if (success==-1) {
+					printf("Input file does not exist: %s,.\n", targets[idx].DependencyNames[i]);
+					return -1;
+				}
+			}
+
+			else if (modificationTime==2) {
+				target->Status = 1;
+			}
+
+			else {
+				target->Status = 0;
+			}
+
 			// ERROR CHECKING should go here.
 
-			build(&targets[idx], targets, nTargetCount);
+			 build(&targets[idx], targets, nTargetCount);
 		}
 	}
 
@@ -192,7 +238,6 @@ int main(int argc, char *argv[])
   //Phase2: Begins ----------------------------------------------------------------------------------------------------
   /*Your code begins here*/
 
-	// TODO: Update status of all targets, based on their timestamps.
 
 	for (int i=0; i<nTargetCount; i++) { // Loop through the targets and build them.
 			build(&targets[i], targets, nTargetCount);
