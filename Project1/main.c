@@ -21,60 +21,45 @@ void show_error_message(char * ExecName);
 //Write your functions prototypes here
 void show_targets(target_t targets[], int nTargetCount);
 
-int build(target_t target, target_t targets[], int nTargetCount) {
+int build(target_t * target, target_t targets[], int nTargetCount) {
+	// Recursion loop to build the dependencies of the target.
+	if (target->DependencyCount != 0) {
+		for (int i=0; i<target->DependencyCount; i++) {
+			int idx = find_target(target->DependencyNames[i], targets, nTargetCount);
 
-	// What if input does not exist.
-	// does_file_exist(file);
-	// DO LATER.
-
-	if (target.DependencyCount != 0) {
-		int pid;
-
-		for (int i=0; i<target.DependencyCount; i++) {
-			pid = fork();
-
-			if (pid==0) {
-				int timeStamp = compare_modification_time(target.TargetName, target.DependencyNames[i]);
-				int idx = find_target(target.DependencyNames[i], targets, nTargetCount);
-
-
-				if(timeStamp == -1)
-				{
-					printf("File missing: ");
-					// Build file.
-					build(targets[idx], targets, nTargetCount);
-				}
-				else if(timeStamp == 0)
-				{
-					printf("Same time: ");
-					// File is the same. Don't build.
-				}
-				else if(timeStamp == 1)
-				{
-					printf("Target is modified later than the input file: ");
-					// Build file.
-					build(targets[idx], targets, nTargetCount);
-				}
-				else {
-					printf("Target is modified earlier than input file: ");
-					// Do not build.
-				}
-
-
-				exit(0);
+			if (idx==-1) { // Failed to find dependency.
+				return -1;
 			}
 
-			if (pid<0) {
-				exit(-1);
-			}
+			// ERROR CHECKING should go here.
 
-			wait(&pid);
+			build(&targets[idx], targets, nTargetCount);
 		}
 	}
 
-	char* args[] = {"echo", target.Command, NULL};
-	printf("%s\n", target.TargetName);
-	execvp("echo", args);
+	// Base case: the target has no dependencies to build.
+	if (target->Status!=1) { // 1 = complete.
+		target->Status = 1;
+		char * args[] = {"echo", target->Command, NULL};
+
+		//Fork here.
+		int pid;
+		pid = fork();
+
+		if (pid<0) {
+			exit(-1);
+		}
+
+		else if (pid==0) {
+			printf("%s\n", target->TargetName);
+			execvp("echo", args);
+		}
+
+		else {
+			wait(&pid);
+			// ERROR CHECKING should go here.
+		}
+	}
 	return 0;
 }
 /*-------------------------------------------------------END OF HELPER FUNCTIONS PROTOTYPES--------------------------*/
@@ -207,23 +192,10 @@ int main(int argc, char *argv[])
   //Phase2: Begins ----------------------------------------------------------------------------------------------------
   /*Your code begins here*/
 
-	printf("-----------------------------------\n");
-	printf("Makefile name: %s\n", Makefile);
-	printf("# of Targets: %d\n", nTargetCount);
-	printf("-----------------------------------\n");
-	int pid;
+	// TODO: Update status of all targets, based on their timestamps.
+
 	for (int i=0; i<nTargetCount; i++) { // Loop through the targets and build them.
-		pid = fork();
-
-		if (pid<0) {
-			exit(-1);
-		}
-		if (pid==0) {
-			build(targets[i], targets, nTargetCount);
-			exit(0);
-		}
-
-		wait(&pid);
+			build(&targets[i], targets, nTargetCount);
 	}
 
   /*End of your code*/
