@@ -20,34 +20,6 @@
 void show_error_message(char * ExecName);
 //Write your functions prototypes here
 void show_targets(target_t targets[], int nTargetCount);
-void updateTimeStamp(target_t* target, target_t target[]);
-
-
-	// TODO: Update status of all targets, based on their timestamps.
-void updateTimeStamp(target_t* target, target_t target[]){
-		char* inputFile
-		char* target;
-		int modificationTime = compare_modification_time(inputFile, target);
-
-		if(modificationTime == -1)
-		{
-			return -1; //There is not an existing file.
-		}
-		if(modificationTime == 0)
-		{
-			return 0; //both files have same timestamps
-		}
-		else if(modificationTime == 1)
-		{
-			return 1; //Means the input file was modified later than the target
-		}
-		else{
-			return 2; //Means the input file was modified earlier than the target
-		}
-
-
-
-}
 
 int build(target_t * target, target_t targets[], int nTargetCount) {
 	// Recursion loop to build the dependencies of the target.
@@ -59,8 +31,10 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 				return -1;
 			}
 
+			// Check modification time stamps.
 			int modificationTime = compare_modification_time(targets[idx].TargetName, targets[idx].DependencyNames[i]);
 
+			/*
 			if (modificationTime==-1) {
 				int success = does_file_exist(targets[idx].DependencyNames[i]);
 				if (success==-1) {
@@ -69,7 +43,7 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 				}
 			}
 
-			else if (modificationTime==2) {
+			else */if (modificationTime==2) {
 				target->Status = 1;
 			}
 
@@ -78,10 +52,19 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 			}
 
 			// ERROR CHECKING should go here.
+			printf("	Start: %s\n", target->TargetName);
+			printf("	Start: %d\n", target->Status);
 
-			 build(&targets[idx], targets, nTargetCount);
+			 int result = build(&targets[idx], targets, nTargetCount);
+			 if (result==-1) {
+				 return -1;
+			 }
+			 target->Status = result;
 		}
 	}
+
+	printf("	End: %s\n", target->TargetName);
+	printf("	End: %d\n", target->Status);
 
 	// Base case: the target has no dependencies to build.
 	if (target->Status!=1) { // 1 = complete.
@@ -97,16 +80,17 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 		}
 
 		else if (pid==0) {
-			printf("%s\n", target->TargetName);
 			execvp("echo", args);
 		}
 
 		else {
 			wait(&pid);
+			printf("%s\n", target->TargetName);
 			// ERROR CHECKING should go here.
 		}
+		return 0;
 	}
-	return 0;
+	return 1;
 }
 /*-------------------------------------------------------END OF HELPER FUNCTIONS PROTOTYPES--------------------------*/
 
