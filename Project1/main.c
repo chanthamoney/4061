@@ -33,13 +33,13 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 	int numOfDependencies = target->DependencyCount;
 	if (numOfDependencies != 0) {
 		for (int i=0; i<numOfDependencies; i++) {
-			int idx = find_target(target->DependencyNames[i], targets, nTargetCount);
-			if (idx == -1) {
-				if (does_file_exist(target->DependencyNames[i]) == -1) {
+			int idx = find_target(target->DependencyNames[i], targets, nTargetCount); // find the index of dependencies
+			if (idx == -1) {// ??
+				if (does_file_exist(target->DependencyNames[i]) == -1) {  //if dependency file does not exist
 					 printf("make: *** No rule to make target'%s', needed by %s.   Stop.\n", target->DependencyNames[i], target->TargetName); //edit later
 					return -1;
 				}
-			} else if (targets[idx].Status != FINISHED) {
+			} else if (targets[idx].Status != FINISHED) { //dependency is found and have not build
 				int result = build(&targets[idx], targets, nTargetCount);
 				if (result == -1) {
 					return -1;
@@ -52,7 +52,7 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 				// printf("STATUS of CHILD: '%d'\n", targets[idx].Status);
 			}
 
-			int modificationTime = compare_modification_time(target->TargetName, target->DependencyNames[i]);
+			int modificationTime = compare_modification_time(target->TargetName, target->DependencyNames[i]); //checking that target is being build
 			// printf("'%s':'%s'; mod time: '%d'\n",target->TargetName, target->DependencyNames[i], modificationTime);
 
 			//TARGET.TARGETNAME is the child because we are now at the base case case
@@ -69,7 +69,7 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 				}
 			}
 			//WHAT IF SAME TIME FOR TARGET AND DEPDENCIES */
-			if (modificationTime == 2 || modificationTime == -1) {
+			if (modificationTime == 2 || modificationTime == -1) { //??
 				target->Status = NEEDS_BUILDING;
 			}
 		}
@@ -90,7 +90,7 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 		char *commandTokens[256];
 		int numTokens;
 		printf("%s\n", target->Command);
-		numTokens = parse_into_tokens(target->Command, commandTokens, " ");
+		numTokens = parse_into_tokens(target->Command, commandTokens, " "); //??
 		if (numTokens != 0) {
 			int pid = fork(); // we are forking to build current dependencies;
 			if (pid<0) {
