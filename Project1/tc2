@@ -1,14 +1,17 @@
-test1: test2 test3
+test1: test2 test3 testq
 	echo Success!
 
 test2: test4
 	echo test2
 
-test3:
+test3: test5
 	echo test3
 
 test4: test5
 	echo test4
+
+testq:
+	echo testq
 
 test5:
 	echo test5

@@ -33,45 +33,27 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 	int numOfDependencies = target->DependencyCount;
 	if (numOfDependencies != 0) {
 		for (int i=0; i<numOfDependencies; i++) {
-			printf("Starting child %s\n", target->DependencyNames[i]);
 			int idx = find_target(target->DependencyNames[i], targets, nTargetCount);
-			printf("Index found: %d\n", idx);
-			if (idx!=-1) {
-				int pid = fork(); // we are forking to build current dependencies;
-				if (pid<0) {
-					exit(-1);
-				}
-				else if (pid==0) {
-					int result = build(&targets[idx], targets, nTargetCount);
-					if (result==-1) {
-						exit(-1);
-					}
-					printf("Finishing child:%s", targets[idx].TargetName);
-					exit(0);
-				}
-
-				else {
-					wait(&pid);
-					if (WEXITSTATUS(pid) != 0) {
-						printf("child exited with error code=%d\n", WEXITSTATUS(pid));
-						exit(-1);
-					}
-					if (targets[idx].Status == NEEDS_BUILDING) {
-						target->Status = NEEDS_BUILDING;
-					}
-					targets[idx].Status == FINISHED;
-					// TODO: Write Error checking to see if other childs processes have failed
-				}
-			}
-			else {
+			if (idx == -1) {
 				if (does_file_exist(target->DependencyNames[i]) == -1) {
-					printf("File does not exist:'%s'\n", target->DependencyNames[i]); //edit later
-					exit(-1);
+					 printf("make: *** No rule to make target'%s', needed by %s.   Stop.\n", target->DependencyNames[i], target->TargetName); //edit later
+					return -1;
 				}
+			} else if (targets[idx].Status != FINISHED) {
+				int result = build(&targets[idx], targets, nTargetCount);
+				if (result == -1) {
+					return -1;
+				}
+				// printf("Finishing child:%s\n", targets[idx].TargetName);
+				if (targets[idx].Status == NEEDS_BUILDING) {
+					target->Status = NEEDS_BUILDING;
+				}
+				targets[idx].Status = FINISHED;
+				// printf("STATUS of CHILD: '%d'\n", targets[idx].Status);
 			}
 
 			int modificationTime = compare_modification_time(target->TargetName, target->DependencyNames[i]);
-			printf("'%s':'%s'; mod time: '%d'\n",target->TargetName, target->DependencyNames[i], modificationTime);
+			// printf("'%s':'%s'; mod time: '%d'\n",target->TargetName, target->DependencyNames[i], modificationTime);
 
 			//TARGET.TARGETNAME is the child because we are now at the base case case
 			/*
@@ -95,10 +77,8 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 		target->Status = NEEDS_BUILDING;
 	}
 
-	printf("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n'%s' - '%d'\n", target->TargetName, does_file_exist(target->TargetName));
-
-	printf("Checking if baby needs to recompile.\n");
-	printf("STATUS: '%d'\n", target->Status);
+	// printf("Checking if baby needs to recompile.\n");
+	// printf("STATUS OF '%s': '%d'\n", target->TargetName, target->Status);
 
 	if (target->Status == NEEDS_BUILDING) { //we have to recompile
 		//This means parent is modified eariler than the child
@@ -107,19 +87,29 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 		//
 		// target->Status = FINISHED;
 		// execvp()
-		printf("\nCommand for %s is: '%s'", target->TargetName, target->Command);
 		char *commandTokens[256];
 		int numTokens;
+		printf("%s\n", target->Command);
 		numTokens = parse_into_tokens(target->Command, commandTokens, " ");
 		if (numTokens != 0) {
-			execvp(commandTokens[0], commandTokens);
+			int pid = fork(); // we are forking to build current dependencies;
+			if (pid<0) {
+				exit(-1);
+			}
+			else if (pid==0) {
+				execvp(commandTokens[0], commandTokens);
+			} else {
+				int status;
+				wait(&status);
+				if (WEXITSTATUS(status) != 0) {
+					printf("Error executing command: %s\n", target->Command);
+					return -1;
+				}
+				return 1;
+			}
 		}
 		//Want to start the array of tokens on the second toker
 	}
-
-	printf("	End: %s\n", target->TargetName);
-	printf("	End: %d\n", target->Status);
-
 
 	return 1;
 }
