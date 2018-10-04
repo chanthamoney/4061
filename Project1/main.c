@@ -21,77 +21,7 @@ void show_error_message(char * ExecName);
 //Write your functions prototypes here
 void show_targets(target_t targets[], int nTargetCount);
 
-int build(target_t * target, target_t targets[], int nTargetCount) {
-	// Recursion loop to build the dependencies of the target.
-	if (target->DependencyCount != 0) {
-		for (int i=0; i<target->DependencyCount; i++) {
-			int idx = find_target(target->DependencyNames[i], targets, nTargetCount);
-
-			if (idx==-1) { // Failed to find dependency.
-				return -1;
-			}
-
-			// Check modification time stamps.
-			int modificationTime = compare_modification_time(targets[idx].TargetName, targets[idx].DependencyNames[i]);
-
-			/*
-			if (modificationTime==-1) {
-				int success = does_file_exist(targets[idx].DependencyNames[i]);
-				if (success==-1) {
-					printf("Input file does not exist: %s,.\n", targets[idx].DependencyNames[i]);
-					return -1;
-				}
-			}
-
-			else */if (modificationTime==2) {
-				target->Status = 1;
-			}
-
-			else {
-				target->Status = 0;
-			}
-
-			// ERROR CHECKING should go here.
-			printf("	Start: %s\n", target->TargetName);
-			printf("	Start: %d\n", target->Status);
-
-			 int result = build(&targets[idx], targets, nTargetCount);
-			 if (result==-1) {
-				 return -1;
-			 }
-			 target->Status = result;
-		}
-	}
-
-	printf("	End: %s\n", target->TargetName);
-	printf("	End: %d\n", target->Status);
-
-	// Base case: the target has no dependencies to build.
-	if (target->Status!=1) { // 1 = complete.
-		target->Status = 1;
-		char * args[] = {"echo", target->Command, NULL};
-
-		//Fork here.
-		int pid;
-		pid = fork();
-
-		if (pid<0) {
-			exit(-1);
-		}
-
-		else if (pid==0) {
-			execvp("echo", args);
-		}
-
-		else {
-			wait(&pid);
-			printf("%s\n", target->TargetName);
-			// ERROR CHECKING should go here.
-		}
-		return 0;
-	}
-	return 1;
-}
+int build(target_t * target, target_t targets[], int nTargetCount);
 /*-------------------------------------------------------END OF HELPER FUNCTIONS PROTOTYPES--------------------------*/
 
 
@@ -129,6 +59,81 @@ void show_targets(target_t targets[], int nTargetCount)
 		}
 		printf("\n  Command: %s \n", command);
 	}
+}
+
+int build(target_t * target, target_t targets[], int nTargetCount) {
+	// Recursion loop to build the dependencies of the target.
+	if (target->DependencyCount != 0) {
+		for (int i=0; i<target->DependencyCount; i++) {
+			int idx = find_target(target->DependencyNames[i], targets, nTargetCount);
+
+			if (idx==-1) { // Failed to find dependency in array.
+				if (does_file_exist(target->DependencyNames[i])!=-1) { // Could it be a file that needs to be processed?
+					int condition = compare_modification_time(target->TargetName, target->DependencyNames[i]);
+					printf("		timeStamp: %d\n", condition);
+
+					if (condition==0 || condition==1) {
+						target->Status = 1;
+					}
+					break;
+				}
+				else { // No. Dependency does not exist in array or directory.
+					return -1;
+				}
+			}
+
+			// Check modification time stamps if files exist.
+			int condition = compare_modification_time(target->TargetName, target->DependencyNames[i]);
+			printf("		timeStamp: %d\n", condition);
+
+			if (condition==0 || condition==1) {
+				target->Status = 1;
+			}
+
+			// Recursively build downward and recursively update upwards parents if children need to be built.
+			 int result = build(&targets[idx], targets, nTargetCount);
+
+			 if (result==-1) {
+				 return -1;
+			 }
+			 else if (result==0) {
+				 target->Status = 0;
+			 }
+		 }
+	 }
+
+	// The target has no dependencies to build.
+	// This will happen at the children/leaves and work its way upward.
+	if (target->Status!=1) { // 1 = complete.
+		printf("		Target Built: %s\n", target->TargetName);
+		target->Status = 1;
+		char command[256]; strcpy(command, target->Command); // Preserve command, because parse_into_tokens destroys it.
+		char * args[64];
+		parse_into_tokens(target->Command, args, " ");
+
+		//Fork here.
+		int pid;
+		pid = fork();
+
+		if (pid<0) {
+			exit(-1);
+		}
+		else if (pid==0) {
+			if (strcmp(args[0],"echo")!=0 && strcmp(args[0],"rm")!=0) { // Special cases that should not be executed.
+				execvp(args[0], args);
+			}
+			exit(0);
+		}
+		else {
+			wait(&pid);
+			printf("%s\n", command);
+			printf("%s\n", target->TargetName);
+			// ERROR CHECKING should go here.
+		}
+
+		return 0;
+	}
+	return 1;
 }
 
 /*-------------------------------------------------------END OF HELPER FUNCTIONS-------------------------------------*/
@@ -223,8 +228,12 @@ int main(int argc, char *argv[])
   /*Your code begins here*/
 
 
-	for (int i=0; i<nTargetCount; i++) { // Loop through the targets and build them.
-			build(&targets[i], targets, nTargetCount);
+	for (int i=0; i<nTargetCount; i++) { // Loop through t
+		printf("	----------\n	Target #%d\n	----------\n", i+1);
+		if (build(&targets[i], targets, nTargetCount)==-1) {
+			printf("Error in makefile.\n");
+			break;
+		}
 	}
 
   /*End of your code*/
