@@ -97,7 +97,12 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 				exit(-1);
 			}
 			else if (pid==0) {
-				execvp(commandTokens[0], commandTokens);
+				if(execvp(commandTokens[0], commandTokens)<0)
+				{
+					printf("make: %s: Command not found.\n", commandTokens[0]);
+					printf("Makefile: recipe for target '%s' failed.\n", target->TargetName);
+					exit(errno); //how to exit the program
+				}
 			} else {
 				int status;
 				wait(&status);

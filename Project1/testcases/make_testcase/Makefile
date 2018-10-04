@@ -5,7 +5,7 @@ make4061_test: util.a main.o
 	gcc -o make4061_test main.o util.a
 
 main.o: main.c
-	gcc -c main.c
+	bcc -c main.c
 
 util.a: parse.o cal.o
 	ar rcs util.a parse.o cal.o
