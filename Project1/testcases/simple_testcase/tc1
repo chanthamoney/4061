@@ -1,5 +1,7 @@
-test1:
+test1: test2
 	echo Success!
 
-test2:
+test2: test3
 	echo Failed.
+
+test3:

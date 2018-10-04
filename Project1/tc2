@@ -1,0 +1,14 @@
+test1: test2 test3
+	echo Success!
+
+test2: test4
+	echo test2
+
+test3:
+	echo test3
+
+test4: test5
+	echo test4
+
+test5:
+	echo test5
