@@ -1,8 +1,8 @@
 /* CSci4061 F2018 Assignment 1
-* login: cselabs login name (login used to submit)
+* login: vang2351
 * date: 10/05/2018
 * name: Cassandra Chanthamontry, Joey Vang, Ounngy Ing
-* id: id for first name, id for second name, ingxx006 */
+* id: chant007, vang2351, ingxx006 */
 
 // This is the main file for the code
 #include <errno.h>
