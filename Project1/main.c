@@ -1,8 +1,8 @@
 /* CSci4061 F2018 Assignment 1
-* login: cselabs login name (login used to submit)
+* login: vang2351
 * date: 10/05/2018
-* name: Cassandra Chanthamontry, Joey Vang, Ounngy Ing
-* id: id for first name, id for second name, ingxx006 */
+* name: Cassandra Chanthamontry, Jogey Vang, Ounngy Ing
+* id: chant077, vang2351, ingxx006 */
 
 // This is the main file for the code
 #include <errno.h>
@@ -105,7 +105,7 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 			int modificationTime = compare_modification_time(target->TargetName, target->DependencyNames[i]);
 			if (modificationTime == 2 || modificationTime == -1) {
 	// If the dependency has been updated (2) or the target has not yet been built (-1), then set flag for building.
-	// Do not that although (-1) indicates that either the target or dependency do not exist, we've already done
+	// Do note that although (-1) indicates that either the target or dependency do not exist, we've already done
 	// checking for the dependency beforehand at line 82.
 				target->Status = NEEDS_BUILDING;
 			}
