@@ -83,7 +83,7 @@ int build(target_t * target, target_t targets[], int nTargetCount) {
 				}
 			}
 
-			else if (targets[idx].Status != FINISHED) {
+			if (targets[idx].Status != FINISHED) {
 	// Dependency is found and MUST be built. Call build() recursively to reach the bottom of the "tree".
 				int result = build(&targets[idx], targets, nTargetCount);
 
