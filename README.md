@@ -5,6 +5,6 @@
 #### name: Cassandra Soukaroune, Joey Vang, Ounngy Ing 
 #### id: id for first name, id for second name, ingxx006
 
-####Cassandra: Develop code and algorithm
-####Jogey: Develop code and algorithm
-####Ounngy: Tested algorithm and documentation
+#### Cassandra: Develop code and algorithm
+#### Jogey: Develop code and algorithm
+#### Ounngy: Tested algorithm and documentation
