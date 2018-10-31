@@ -2,8 +2,8 @@
 ## CSci4061 S2018 Assignment 1
 #### login: cselabs login name (login used to submit)
 #### date: 10/05/2018
-#### name: Cassandra Chanthamontry, Joey Vang, Ounngy Ing 
-#### id: id for first name, id for second name, ingxx006
+#### name: Cassandra Chanthamontry, Jogey Vang, Ounngy Ing 
+#### id: chant077, vang2351, ingxx006
 
 Cassandra: Develop code and algorithm.
 
