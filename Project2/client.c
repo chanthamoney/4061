@@ -35,16 +35,20 @@ void main(int argc, char * argv[]) {
           exit(-1);
     }
 
+	// if server coonection sucessful, fork 2 process,
+	//1 receiving the input from the server to display it on the screen, 
+	// the other taking the input from the user and send it to the server
+
 	pid_t pid = fork();
 	if(pid < 0 ) { 
 		//error happen
 		perror("Fail to fork");
 		exit(-1);
-	} else if(pid == 0){//child, 
+	} else if(pid == 0){//child, receiving the input from the server to display it on the screen
 		//wait input for the server
 
 		// Close unused pipes in CHILD process.
-          if ( (close(pipe_user_reading_from_server[1]) < 0) || (close(pipe_user_writing_to_server[0]) < 0) )
+          if ( (close(pipe_user_reading_from_server[0]) < 0) || (close(pipe_user_writing_to_server[1]) < 0) )
           {
             perror("ERROR: Failed to close unused SERVER pipes on child procress.");
             exit(-1);
@@ -55,17 +59,19 @@ void main(int argc, char * argv[]) {
 		// read the data into a buffer
 		int readStatus = read(pipe_user_reading_from_server, stdin, MAX_MSG);
 		if(readStatus >= 0) {//if read return some data
+			//send data to the child process ?
 			if (write(pipe_user_writing_to_server, stdin, MAX_MSG) == -1) {
 				perror("Fail to write to server");
 				exit(-1);
 			}
-
 		}
 
 //terminate child when somthing happen to the server 
 
 	}else{//parent
-	//fork another child 
+	//there're 2 ways that the process should end, either the server is being shutdown, or the user wants to leave by himself
+	
+		//fork another child 
 		pid_t s = fork();
 
 		if(s==0){//child
@@ -75,6 +81,7 @@ void main(int argc, char * argv[]) {
 			//wait for any of those child
 			//if any of them finish, signal the other to finish 
 		}
+		// sleep(waitTime);
 	}
 
 	// Poll stdin (input from the terminal) and send it to server (child process) via pipe
