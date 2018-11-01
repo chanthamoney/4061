@@ -15,7 +15,7 @@
 void main(int argc, char * argv[]) {
 
 	char * YOUR_UNIQUE_ID = "CSCI_39";
-	int waitTime = 1;
+	int waitTime = 1000;
 	int pipe_user_reading_from_server[2], pipe_user_writing_to_server[2];
 
 	// You will need to get user name as a parameter, argv[1].
@@ -24,21 +24,15 @@ void main(int argc, char * argv[]) {
 		exit(-1);
 	}
 
+	// Set pipes to NONBLOCKING behaviour.
+	fcntl(pipe_user_reading_from_server[0], F_SETFL, fcntl(pipe_user_reading_from_server[0], F_GETFL)| O_NONBLOCK);
+	fcntl(pipe_user_writing_to_server[1], F_SETFL, fcntl(pipe_user_writing_to_server[1], F_GETFL)| O_NONBLOCK);
 	fcntl(0, F_SETFL, fcntl(0, F_GETFL)| O_NONBLOCK);
 
 	/* -------------- YOUR CODE STARTS HERE -----------------------------------*/
 
 	// poll pipe retrieved and print it to sdiout
 	while (1) {
-			if(pipe(pipe_user_reading_from_server) < 0 || pipe(pipe_user_writing_to_server) < 0) {
-				perror("fail to create pipe for server");
-				exit(-1);
-			}
-
-		  // Set pipes to NONBLOCKING behaviour.
-			fcntl(pipe_user_reading_from_server[0], F_SETFL, fcntl(pipe_user_reading_from_server[0], F_GETFL)| O_NONBLOCK);
-			fcntl(pipe_user_writing_to_server[1], F_SETFL, fcntl(pipe_user_writing_to_server[1], F_GETFL)| O_NONBLOCK);
-
 			// -------------------------------------------------------------------- //
 		  // -------------------------- POLL ON STDIN. -------------------------- //
 		  // -------------------------------------------------------------------- //
@@ -76,7 +70,7 @@ void main(int argc, char * argv[]) {
 			else if (childServerStatus != 0)
 			{
 				// Message received from STDIN.
-				printf("SERVER: %s\n", childServerBuffer);
+				printf("NOTICE: %s\n", childServerBuffer);
 			}
 			else
 			{
@@ -144,7 +138,7 @@ void main(int argc, char * argv[]) {
 		// Poll stdin (input from the terminal) and send it to server (child process) via pipe
 
 		/* -------------- YOUR CODE ENDS HERE -----------------------------------*/
-		sleep(waitTime);
+		usleep(waitTime);
 	}
 }
 

@@ -239,7 +239,7 @@ void init_user_list(USER * user_list) {
 /* ---------------------Start of the Main function ----------------------------------------------*/
 int main(int argc, char * argv[])
 {
-  int waitTime = 1;
+  int waitTime = 1000;
   char * YOUR_UNIQUE_ID = "CSCI_39";
 	int nbytes;
 	setup_connection(YOUR_UNIQUE_ID); // Specifies the connection point as argument.
@@ -273,18 +273,18 @@ int main(int argc, char * argv[])
       {
         // Create pipes from child to USER.
         // Error checking is done on every system call.
-        int pipe_child_reading_from_USER[2];
-        int pipe_child_writing_to_USER[2];
+        int pipe_user_reading_from_server[2];
+        int pipe_user_writing_to_server[2];
         // Error check when creating pipes.
-        if ( (pipe(pipe_child_reading_from_USER) < 0) || (pipe(pipe_child_writing_to_USER) < 0) ) {
+        if ( (pipe(pipe_user_reading_from_server) < 0) || (pipe(pipe_user_writing_to_server) < 0) ) {
           printf("ERROR: Failed to create pipes for USER: %s.\n", user_id);
           return(-1);
         }
         // Set pipes to NONBLOCKING behaviour.
-        fcntl(pipe_child_reading_from_USER[0], F_SETFL, fcntl(pipe_child_reading_from_USER[0], F_GETFL)| O_NONBLOCK);
-        fcntl(pipe_child_reading_from_USER[1], F_SETFL, fcntl(pipe_child_reading_from_USER[1], F_GETFL)| O_NONBLOCK);
-        fcntl(pipe_child_writing_to_USER[0], F_SETFL, fcntl(pipe_child_writing_to_USER[0], F_GETFL)| O_NONBLOCK);
-        fcntl(pipe_child_writing_to_USER[1], F_SETFL, fcntl(pipe_child_writing_to_USER[1], F_GETFL)| O_NONBLOCK);
+        fcntl(pipe_user_reading_from_server[0], F_SETFL, fcntl(pipe_user_reading_from_server[0], F_GETFL)| O_NONBLOCK);
+        fcntl(pipe_user_reading_from_server[1], F_SETFL, fcntl(pipe_user_reading_from_server[1], F_GETFL)| O_NONBLOCK);
+        fcntl(pipe_user_writing_to_server[0], F_SETFL, fcntl(pipe_user_writing_to_server[0], F_GETFL)| O_NONBLOCK);
+        fcntl(pipe_user_writing_to_server[1], F_SETFL, fcntl(pipe_user_writing_to_server[1], F_GETFL)| O_NONBLOCK);
 
         int pid = fork(); // Fork and create a child procress.
 
@@ -301,11 +301,16 @@ int main(int argc, char * argv[])
           // Child process: poli users and SERVER
 
           // Close unused pipes in CHILD.
+
+          /*
+
           if ( (close(pipe_SERVER_reading_from_child[0]) < 0) || (close(pipe_SERVER_writing_to_child[1]) < 0) )
           {
             printf("ERROR: Failed to close unused SERVER pipes on child procress.\n");
             exit(-1);
           }
+
+          */
 
           while (1)
           {
@@ -319,7 +324,7 @@ int main(int argc, char * argv[])
             else if (serverStatus != -1)
             {
               // Message read from SERVER.
-              if (write(pipe_child_writing_to_USER[1], serverBuffer, MAX_MSG) < 0)
+              if (write(pipe_user_reading_from_server[1], serverBuffer, MAX_MSG) < 0)
               {
                 printf("ERROR: Failed to write to USER.\n");
                 exit(-1);
@@ -334,7 +339,7 @@ int main(int argc, char * argv[])
 
           // -------------------------- Poll on USER. -------------------------- //
             char userBuffer[MAX_MSG];
-            int userStatus = read(pipe_child_reading_from_USER[0], userBuffer, MAX_MSG);
+            int userStatus = read(pipe_user_writing_to_server[0], userBuffer, MAX_MSG);
             if ( (userStatus < 0) && (errno == EAGAIN) )
             {
               // No message to be read from USER. Pass.
@@ -356,7 +361,7 @@ int main(int argc, char * argv[])
               exit(-1);
             }
 
-            sleep(waitTime);
+            usleep(waitTime);
           }
         }
 
@@ -371,11 +376,17 @@ int main(int argc, char * argv[])
           // Server process: Add a new user information into an empty slot
           add_user(idx, user_list, pid, user_id, pipe_SERVER_writing_to_child[1], pipe_SERVER_reading_from_child[0]);
           // Close unused pipes in SERVER.
+
+          /*
+
           if ( (close(pipe_SERVER_reading_from_child[1]) < 0) || (close(pipe_SERVER_writing_to_child[0]) < 0) )
           {
             printf("ERROR: Failed to close SERVER unused pipes on SERVER.\n");
             return -1;
           }
+
+          */
+
         }
       }
       // -------------------------- Finished establishing new user connection. -------------------------- //
@@ -400,7 +411,7 @@ int main(int argc, char * argv[])
             // Message read from CHILD.
             // Process user message/command.
 
-            printf("%s\n", buffer);
+            printf("%s", buffer);
 
             /*
 
@@ -427,6 +438,9 @@ int main(int argc, char * argv[])
         }
     }
 
+    // ---------------------------------------------------------------------- //
+    // -------------------------- POLL FROM STDIN. -------------------------- //
+    // ---------------------------------------------------------------------- //
 		// Poll stdin (input from the terminal) and handle admnistrative command
     char buffer[MAX_MSG];
     int status = read(0, buffer, MAX_MSG);
@@ -459,7 +473,7 @@ int main(int argc, char * argv[])
       return -1;
     }
 
-    sleep(waitTime);
+    usleep(waitTime);
 
 		/* ------------------------YOUR CODE FOR MAIN--------------------------------*/
 	}
