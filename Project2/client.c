@@ -24,6 +24,8 @@ void main(int argc, char * argv[]) {
 
 	/* -------------- YOUR CODE STARTS HERE -----------------------------------*/
 
+	// poll pipe retrieved and print it to sdiout
+
 	if(pipe(pipe_user_reading_from_server) < 0 || pipe(pipe_user_writing_to_server) < 0) {
 		perror("fail to create pipe for server");
 		exit(-1);
@@ -54,7 +56,6 @@ void main(int argc, char * argv[]) {
             exit(-1);
           }
 
-		// poll pipe retrieved and print it to sdiout
 
 		// read the data into a buffer
 		int readStatus = read(pipe_user_reading_from_server, stdin, MAX_MSG);
@@ -69,7 +70,7 @@ void main(int argc, char * argv[]) {
 //terminate child when somthing happen to the server
 
 	}else{//parent
-	//there're 2 ways that the process should end, either the server is being shutdown, or the user wants to leave by himself
+	//there're 2 ways that the process should end, either the server is being shutdown, or the user wants to leave by themself
 
 		//fork another child
 		pid_t s = fork();
@@ -80,7 +81,7 @@ void main(int argc, char * argv[]) {
 		}else{
 			//wait for any of those child
 			//if any of them finish, signal the other to finish
-			
+
 		}
 		// sleep(waitTime);
 	}
