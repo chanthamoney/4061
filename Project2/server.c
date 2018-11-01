@@ -245,6 +245,7 @@ int main(int argc, char * argv[])
 
 	USER user_list[MAX_USER];
 	init_user_list(user_list);   // Initialize user list
+  int userCount = 0;
 
 	char buf[MAX_MSG];
 	fcntl(0, F_SETFL, fcntl(0, F_GETFL)| O_NONBLOCK);
@@ -312,7 +313,7 @@ int main(int argc, char * argv[])
           {
           // -------------------------- Poll on SERVER. -------------------------- //
             char serverBuffer[MAX_MSG];
-            int status = read(pipe_SERVER_writing_to_child, serverBuffer, MAX_MSG);
+            int status = read(pipe_SERVER_writing_to_child[0], serverBuffer, MAX_MSG);
             if ( (status > 0) && (errno == EAGAIN) )
             {
               // No message to be read from SERVER. Pass.
@@ -320,6 +321,11 @@ int main(int argc, char * argv[])
             else if (status >= 0)
             {
               // Message read from SERVER.
+              if (write(pipe_child_writing_to_USER[1], serverBuffer, MAX_MSG) < 0)
+              {
+                println("ERROR: Failed to write to USER.");
+                exit(-1);
+              }
             }
             else
             {
@@ -330,7 +336,7 @@ int main(int argc, char * argv[])
 
           // -------------------------- Poll on USER. -------------------------- //
             char userBuffer[MAX_MSG];
-            int status = read(pipe_child_reading_from_USER, userBuffer, MAX_MSG);
+            int status = read(pipe_child_reading_from_USER[0], userBuffer, MAX_MSG);
             if ( (status > 0) && (errno == EAGAIN) )
             {
               // No message to be read from USER. Pass.
@@ -339,7 +345,7 @@ int main(int argc, char * argv[])
             {
               // Message read from USER.
               // Forward to SERVER for procressing.
-              if (write(pipe_SERVER_reading_from_child, userBuffer, MAX_MSG) < 0)
+              if (write(pipe_SERVER_reading_from_child[1], userBuffer, MAX_MSG) < 0)
               {
                 println("ERROR: Failed to write to SERVER.");
                 exit(-1);
@@ -360,7 +366,8 @@ int main(int argc, char * argv[])
         else
         {
           // Server process: Add a new user information into an empty slot
-          add_user(idx, user_list, pid, user_id, pipe_child_reading_from_USER, pipe_child_writing_to_USER);
+          add_user(idx, user_list, pid, user_id, pipe_SERVER_writing_to_child[1], pipe_SERVER_reading_from_child[0]);
+          userCount++;
           // Close unused pipes in SERVER.
           if ( (close(pipe_SERVER_reading_from_child[1]) < 0) || (close(pipe_SERVER_writing_to_child[0]) < 0) )
           {
@@ -375,12 +382,61 @@ int main(int argc, char * argv[])
     // --------------------------------------------------------------------------------- //
     // -------------------------- POLL FROM CHILD PROCRESSES. -------------------------- //
     // --------------------------------------------------------------------------------- //
-    if ()
+    for (int i = 0; i<MAX_USER; i++)
     {
 		    // poll child processes and handle user commands
+        if (user_list[i].status != SLOT_EMPTY)
+        {
+          char buffer[MAX_MSG];
+          int status = read(user_list[i].m_fd_to_server, buffer, MAX_MSG);
+          if ( (status > 0) && (errno == EAGAIN) )
+          {
+            // No message to be read from CHILD. Pass.
+          }
+          else if (status >= 0)
+          {
+            // Message read from CHILD.
+            // Process user message/command.
+            println("%s\n", buffer);
+          }
+          else
+          {
+            // ERROR occured.
+            println("ERROR: Failed to read from CHILD: %s.\n", user_id);
+          }
+        }
     }
 
 		// Poll stdin (input from the terminal) and handle admnistrative command
+    char buffer[MAX_MSG];
+    int status = read(STDIN_FILENO, buffer, MAX_MSG);
+    if ( (status > 0) && (errno == EAGAIN) )
+    {
+      // No message to be read from CHILD. Pass.
+    }
+    else if (status >= 0)
+    {
+      // Message received from STDIN.
+      // Send message to CHILD.
+      for (int i = 0; i<MAX_USER; i++)
+      {
+          // poll child processes and handle user commands
+          if (user_list[i].status != SLOT_EMPTY)
+          {
+            if (write(user_list[i].m_fd_to_user, Buffer, MAX_MSG) < 0)
+            {
+              println("ERROR: Failed to write to USER: %s.", user_list[i].m_user_id);
+              return -1;
+            }
+          }
+      }
+    }
+    else
+    {
+      // ERROR occured.
+      println("ERROR: Failed to read from STDIN: %s.\n", user_id);
+      return -1;
+    }
 
     sleep(waitTime);
 
