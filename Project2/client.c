@@ -31,16 +31,16 @@ void main(int argc, char * argv[]) {
 
 	  // Set pipes to NONBLOCKING behaviour.
     if ( (fcntl(pipe_user_reading_from_server, F_SETFL, O_NONBLOCK) < 0) || (fcntl(pipe_user_writing_to_server, F_SETFL, O_NONBLOCK) < 0) ) {
-          println("ERROR: Failed to set NONBLOCKING behaviour on pipes for server: %s.\n", user_id);
+          perror("ERROR: Failed to set NONBLOCKING behaviour on pipes for server: %s.\n", user_id);
           exit(-1);
     }
 
 	// if server coonection sucessful, fork 2 process,
-	//1 receiving the input from the server to display it on the screen, 
+	//1 receiving the input from the server to display it on the screen,
 	// the other taking the input from the user and send it to the server
 
 	pid_t pid = fork();
-	if(pid < 0 ) { 
+	if(pid < 0 ) {
 		//error happen
 		perror("Fail to fork");
 		exit(-1);
@@ -53,7 +53,7 @@ void main(int argc, char * argv[]) {
             perror("ERROR: Failed to close unused SERVER pipes on child procress.");
             exit(-1);
           }
-	
+
 		// poll pipe retrieved and print it to sdiout
 
 		// read the data into a buffer
@@ -66,20 +66,21 @@ void main(int argc, char * argv[]) {
 			}
 		}
 
-//terminate child when somthing happen to the server 
+//terminate child when somthing happen to the server
 
 	}else{//parent
 	//there're 2 ways that the process should end, either the server is being shutdown, or the user wants to leave by himself
-	
-		//fork another child 
+
+		//fork another child
 		pid_t s = fork();
 
 		if(s==0){//child
 			//handle user
-			
+
 		}else{
 			//wait for any of those child
-			//if any of them finish, signal the other to finish 
+			//if any of them finish, signal the other to finish
+			
 		}
 		// sleep(waitTime);
 	}
@@ -87,9 +88,7 @@ void main(int argc, char * argv[]) {
 	// Poll stdin (input from the terminal) and send it to server (child process) via pipe
 
 	/* -------------- YOUR CODE ENDS HERE -----------------------------------*/
-	
+
 }
 
 /*--------------------------End of main for the client --------------------------*/
-
-
