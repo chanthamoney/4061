@@ -24,21 +24,43 @@ void main(int argc, char * argv[]) {
 
 	/* -------------- YOUR CODE STARTS HERE -----------------------------------*/
 
-	
-	// poll pipe retrieved and print it to sdiout
 	if(pipe(pipe_user_reading_from_server) < 0 || pipe(pipe_user_writing_to_server) < 0) {
-		perror("fail to create pipe for client");
+		perror("fail to create pipe for server");
 		exit(-1);
 	}
-		if(pipe(pipe_user_reading_from_server) < 0 || pipe(pipe_user_writing_to_server) < 0) {
-		perror("fail to create pipe for client");
+
+	  // Set pipes to NONBLOCKING behaviour.
+    if ( (fcntl(pipe_user_reading_from_server, F_SETFL, O_NONBLOCK) < 0) || (fcntl(pipe_user_writing_to_server, F_SETFL, O_NONBLOCK) < 0) ) {
+          println("ERROR: Failed to set NONBLOCKING behaviour on pipes for server: %s.\n", user_id);
+          exit(-1);
+    }
+
+	pid_t pid = fork();
+	if(pid < 0 ) { 
+		//error happen
+		perror("Fail to fork");
 		exit(-1);
-	}
-	
-	// poll pipe retrieved and print it to sdiout
-	pid_t server = fork();
-	if(server==0){//child, 
+	} else if(pid == 0){//child, 
 		//wait input for the server
+
+		// Close unused pipes in CHILD process.
+          if ( (close(pipe_user_reading_from_server[1]) < 0) || (close(pipe_user_writing_to_server[0]) < 0) )
+          {
+            perror("ERROR: Failed to close unused SERVER pipes on child procress.");
+            exit(-1);
+          }
+	
+		// poll pipe retrieved and print it to sdiout
+
+		// read the data into a buffer
+		int readStatus = read(pipe_user_reading_from_server, stdin, MAX_MSG);
+		if(readStatus >= 0) {//if read return some data
+			if (write(pipe_user_writing_to_server, stdin, MAX_MSG) == -1) {
+				perror("Fail to write to server");
+				exit(-1);
+			}
+
+		}
 
 //terminate child when somthing happen to the server 
 
@@ -53,16 +75,10 @@ void main(int argc, char * argv[]) {
 			//wait for any of those child
 			//if any of them finish, signal the other to finish 
 		}
-
-
-	//wait for child to finish
-	//signal to finish other child 
-	//quit
 	}
 
 	// Poll stdin (input from the terminal) and send it to server (child process) via pipe
 
-		//
 	/* -------------- YOUR CODE ENDS HERE -----------------------------------*/
 	
 }
