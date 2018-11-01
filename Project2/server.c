@@ -240,7 +240,7 @@ void init_user_list(USER * user_list) {
 int main(int argc, char * argv[])
 {
   int waitTime = 1;
-  char * YOUR_UNIQUE_ID = "CSCI_69";
+  char * YOUR_UNIQUE_ID = "CSCI_39";
 	int nbytes;
 	setup_connection(YOUR_UNIQUE_ID); // Specifies the connection point as argument.
 
@@ -399,6 +399,11 @@ int main(int argc, char * argv[])
           {
             // Message read from CHILD.
             // Process user message/command.
+
+            printf("%s\n", buffer);
+
+            /*
+
             char * username;
             char * text;
             if ( (extract_name(buffer, username) != -1) && (extract_text(buffer, text) != -1) )
@@ -410,6 +415,9 @@ int main(int argc, char * argv[])
               printf("ERROR: Failed to process message from child.\n");
               return -1;
             }
+
+            */
+
           }
           else
           {
@@ -433,15 +441,15 @@ int main(int argc, char * argv[])
       // Send message to CHILD.
       for (int i = 0; i<MAX_USER; i++)
       {
-          // poll child processes and handle user commands
-          if (user_list[i].m_status != SLOT_EMPTY)
+        // poll child processes and handle user commands
+        if (user_list[i].m_status != SLOT_EMPTY)
+        {
+          if (write(user_list[i].m_fd_to_user, buffer, MAX_MSG) < 0)
           {
-            if (write(user_list[i].m_fd_to_user, buffer, MAX_MSG) < 0)
-            {
-              printf("ERROR: Failed to write to USER: %s.\n", user_list[i].m_user_id);
-              return -1;
-            }
+            printf("ERROR: Failed to write to USER: %s.\n", user_list[i].m_user_id);
+            return -1;
           }
+        }
       }
     }
     else
