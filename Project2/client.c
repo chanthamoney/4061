@@ -10,6 +10,7 @@
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include "comm.h"
+#include "util.h"
 
 /* -------------------------Main function for the client ----------------------*/
 void main(int argc, char * argv[]) {
@@ -24,10 +25,15 @@ void main(int argc, char * argv[]) {
 		exit(-1);
 	}
 
+	printf("READ END: %d\n", pipe_user_reading_from_server[0]);
+	printf("WRITE END: %d\n", pipe_user_reading_from_server[1]);
+
 	// Set pipes to NONBLOCKING behaviour.
 	fcntl(pipe_user_reading_from_server[0], F_SETFL, fcntl(pipe_user_reading_from_server[0], F_GETFL)| O_NONBLOCK);
 	fcntl(pipe_user_writing_to_server[1], F_SETFL, fcntl(pipe_user_writing_to_server[1], F_GETFL)| O_NONBLOCK);
 	fcntl(0, F_SETFL, fcntl(0, F_GETFL)| O_NONBLOCK);
+
+	print_prompt(argv[1]);
 
 	/* -------------- YOUR CODE STARTS HERE -----------------------------------*/
 
@@ -37,6 +43,7 @@ void main(int argc, char * argv[]) {
 		  // -------------------------- POLL ON STDIN. -------------------------- //
 		  // -------------------------------------------------------------------- //
 			char stdinBuffer[MAX_MSG];
+			memset(stdinBuffer, 0, sizeof(stdinBuffer));
 	    int stdinStatus = read(0, stdinBuffer, MAX_MSG);
 	    //printf("status of STDIN: %d\n", status);
 	    if ( (stdinStatus < 0) && (errno == EAGAIN) )
@@ -50,6 +57,7 @@ void main(int argc, char * argv[]) {
 				{
 					printf("ERROR: Failed to write to CHILD process of SERVER.\n");
 				}
+				print_prompt(argv[1]);
 	    }
 	    else
 	    {
@@ -61,7 +69,9 @@ void main(int argc, char * argv[]) {
 			// -------------------------- POLL ON CHILD PROCESS OF THE SERVER. -------------------------- //
 			// ------------------------------------------------------------------------------------------ //
 			char childServerBuffer[MAX_MSG];
+			memset(childServerBuffer, 0, sizeof(childServerBuffer));
 			int childServerStatus = read(pipe_user_reading_from_server[0], childServerBuffer, MAX_MSG);
+			printf("READ END: %d\n", pipe_user_reading_from_server[0]);
 			//printf("status of STDIN: %d\n", status);
 			if ( (childServerStatus < 0) && (errno == EAGAIN) )
 			{
@@ -70,7 +80,8 @@ void main(int argc, char * argv[]) {
 			else if (childServerStatus != 0)
 			{
 				// Message received from STDIN.
-				printf("NOTICE: %s\n", childServerBuffer);
+				printf("\nNOTICE: %s", childServerBuffer);
+				print_prompt(argv[1]);
 			}
 			else
 			{

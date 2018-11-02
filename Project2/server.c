@@ -280,6 +280,7 @@ int main(int argc, char * argv[])
           printf("ERROR: Failed to create pipes for USER: %s.\n", user_id);
           return(-1);
         }
+
         // Set pipes to NONBLOCKING behaviour.
         fcntl(pipe_user_reading_from_server[0], F_SETFL, fcntl(pipe_user_reading_from_server[0], F_GETFL)| O_NONBLOCK);
         fcntl(pipe_user_reading_from_server[1], F_SETFL, fcntl(pipe_user_reading_from_server[1], F_GETFL)| O_NONBLOCK);
@@ -312,10 +313,12 @@ int main(int argc, char * argv[])
 
           */
 
+          char serverBuffer[MAX_MSG];
+          char userBuffer[MAX_MSG];
           while (1)
           {
           // -------------------------- Poll on SERVER. -------------------------- //
-            char serverBuffer[MAX_MSG];
+            memset(serverBuffer, 0, sizeof(serverBuffer));
             int serverStatus = read(pipe_SERVER_writing_to_child[0], serverBuffer, MAX_MSG);
             if ( (serverStatus < 0) && (errno == EAGAIN) )
             {
@@ -326,9 +329,11 @@ int main(int argc, char * argv[])
               // Message read from SERVER.
               if (write(pipe_user_reading_from_server[1], serverBuffer, MAX_MSG) < 0)
               {
-                printf("ERROR: Failed to write to USER.\n");
+                printf("ERROR: Failed to write to USER: %s\n", user_id);
                 exit(-1);
               }
+              printf("READ END: %d\n", pipe_user_reading_from_server[0]);
+              printf("WRITE END: %d\n", pipe_user_reading_from_server[1]);
             }
             else
             {
@@ -338,7 +343,7 @@ int main(int argc, char * argv[])
             }
 
           // -------------------------- Poll on USER. -------------------------- //
-            char userBuffer[MAX_MSG];
+            memset(userBuffer, 0, sizeof(userBuffer));
             int userStatus = read(pipe_user_writing_to_server[0], userBuffer, MAX_MSG);
             if ( (userStatus < 0) && (errno == EAGAIN) )
             {
@@ -392,6 +397,44 @@ int main(int argc, char * argv[])
       // -------------------------- Finished establishing new user connection. -------------------------- //
     }
 
+    // ---------------------------------------------------------------------- //
+    // -------------------------- POLL FROM STDIN. -------------------------- //
+    // ---------------------------------------------------------------------- //
+		// Poll stdin (input from the terminal) and handle admnistrative command
+    char stdinBuffer[MAX_MSG];
+    memset(stdinBuffer, 0, sizeof(stdinBuffer));
+    int status = read(0, stdinBuffer, MAX_MSG);
+    //printf("status of STDIN: %d\n", status);
+    if ( (status < 0) && (errno == EAGAIN) )
+    {
+      // No message to be read from STDIN. Pass.
+    }
+    else if (status != 0)
+    {
+      // Message received from STDIN.
+      // Send message to CHILD.
+      for (int i = 0; i<MAX_USER; i++)
+      {
+        // poll child processes and handle user commands
+        if (user_list[i].m_status != SLOT_EMPTY)
+        {
+          if (write(user_list[i].m_fd_to_user, stdinBuffer, MAX_MSG) < 0)
+          {
+            printf("ERROR: Failed to write to USER: %s.\n", user_list[i].m_user_id);
+            return -1;
+          }
+          print_prompt("admin");
+        }
+      }
+    }
+    else
+    {
+      // ERROR occured.
+      printf("ERROR: Failed to read from STDIN.\n");
+      return -1;
+    }
+
+
     // --------------------------------------------------------------------------------- //
     // -------------------------- POLL FROM CHILD PROCRESSES. -------------------------- //
     // --------------------------------------------------------------------------------- //
@@ -401,6 +444,7 @@ int main(int argc, char * argv[])
         if (user_list[i].m_status != SLOT_EMPTY)
         {
           char buffer[MAX_MSG];
+          memset(buffer, 0, sizeof(buffer));
           int status = read(user_list[i].m_fd_to_server, buffer, MAX_MSG);
           if ( (status < 0) && (errno == EAGAIN) )
           {
@@ -411,7 +455,8 @@ int main(int argc, char * argv[])
             // Message read from CHILD.
             // Process user message/command.
 
-            printf("%s", buffer);
+            printf("\n%s: %s", user_list[i].m_user_id, buffer);
+            print_prompt("admin");
 
             /*
 
@@ -436,41 +481,6 @@ int main(int argc, char * argv[])
             printf("ERROR: Failed to read from CHILD: %s.\n", user_id);
           }
         }
-    }
-
-    // ---------------------------------------------------------------------- //
-    // -------------------------- POLL FROM STDIN. -------------------------- //
-    // ---------------------------------------------------------------------- //
-		// Poll stdin (input from the terminal) and handle admnistrative command
-    char buffer[MAX_MSG];
-    int status = read(0, buffer, MAX_MSG);
-    //printf("status of STDIN: %d\n", status);
-    if ( (status < 0) && (errno == EAGAIN) )
-    {
-      // No message to be read from STDIN. Pass.
-    }
-    else if (status != 0)
-    {
-      // Message received from STDIN.
-      // Send message to CHILD.
-      for (int i = 0; i<MAX_USER; i++)
-      {
-        // poll child processes and handle user commands
-        if (user_list[i].m_status != SLOT_EMPTY)
-        {
-          if (write(user_list[i].m_fd_to_user, buffer, MAX_MSG) < 0)
-          {
-            printf("ERROR: Failed to write to USER: %s.\n", user_list[i].m_user_id);
-            return -1;
-          }
-        }
-      }
-    }
-    else
-    {
-      // ERROR occured.
-      printf("ERROR: Failed to read from STDIN.\n");
-      return -1;
     }
 
     usleep(waitTime);
