@@ -70,7 +70,7 @@ void main(int argc, char * argv[]) {
 			else if (childServerStatus != 0)
 			{
 				// Message received from STDIN.
-				printf("NOTICE: %s\n", childServerBuffer);
+				printf("%s: %s\n",argv[1], childServerBuffer);
 			}
 			else
 			{
