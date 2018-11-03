@@ -258,14 +258,18 @@ int main(int argc, char * argv[])
 		// Handling a new connection using get_connection
 		int pipe_SERVER_reading_from_child[2];
 		int pipe_SERVER_writing_to_child[2];
+    int pipe_child_reading_from_user[2];
+    int pipe_child_writing_to_user[2];
+
 		char user_id[MAX_USER_ID];
 
   // ------------------------------------------------------------------------------------ //
   // -------------------------- POLL FOR NEW USER CONNECTIONS. -------------------------- //
   // ------------------------------------------------------------------------------------ //
     // Gets connections and internally creates the pipes for communication.
-    if (get_connection(user_id, pipe_SERVER_writing_to_child, pipe_SERVER_reading_from_child) != -1)
+    if (get_connection(user_id, pipe_child_writing_to_user, pipe_child_reading_from_user) != -1)
     {
+      printf("\nUSER CONNECTED: %s\n", user_id);
       // Check max user and same user id
       int idx = find_empty_slot(user_list);
       if ( (idx != -1) && (find_user_index(user_list, user_id) < 0) )
@@ -273,19 +277,22 @@ int main(int argc, char * argv[])
       {
         // Create pipes from child to USER.
         // Error checking is done on every system call.
-        int pipe_user_reading_from_server[2];
-        int pipe_user_writing_to_server[2];
         // Error check when creating pipes.
-        if ( (pipe(pipe_user_reading_from_server) < 0) || (pipe(pipe_user_writing_to_server) < 0) ) {
+        if ( (pipe(pipe_SERVER_reading_from_child) < 0) || (pipe(pipe_SERVER_writing_to_child) < 0) ) {
           printf("ERROR: Failed to create pipes for USER: %s.\n", user_id);
           return(-1);
         }
 
-        // Set pipes to NONBLOCKING behaviour.
-        fcntl(pipe_user_reading_from_server[0], F_SETFL, fcntl(pipe_user_reading_from_server[0], F_GETFL)| O_NONBLOCK);
-        fcntl(pipe_user_reading_from_server[1], F_SETFL, fcntl(pipe_user_reading_from_server[1], F_GETFL)| O_NONBLOCK);
-        fcntl(pipe_user_writing_to_server[0], F_SETFL, fcntl(pipe_user_writing_to_server[0], F_GETFL)| O_NONBLOCK);
-        fcntl(pipe_user_writing_to_server[1], F_SETFL, fcntl(pipe_user_writing_to_server[1], F_GETFL)| O_NONBLOCK);
+        // Set CHILD-TO-USER pipes to NONBLOCKING behaviour.
+        fcntl(pipe_child_reading_from_user[0], F_SETFL, fcntl(pipe_child_reading_from_user[0], F_GETFL)| O_NONBLOCK);
+        fcntl(pipe_child_reading_from_user[1], F_SETFL, fcntl(pipe_child_reading_from_user[1], F_GETFL)| O_NONBLOCK);
+        fcntl(pipe_child_writing_to_user[0], F_SETFL, fcntl(pipe_child_writing_to_user[0], F_GETFL)| O_NONBLOCK);
+        fcntl(pipe_child_writing_to_user[1], F_SETFL, fcntl(pipe_child_writing_to_user[1], F_GETFL)| O_NONBLOCK);
+        // Make CHILD-TO-SERVER pipes to NONBLOCKING behaviour.
+        fcntl(pipe_SERVER_reading_from_child[0], F_SETFL, fcntl(pipe_SERVER_reading_from_child[0], F_GETFL)| O_NONBLOCK);
+        fcntl(pipe_SERVER_reading_from_child[1], F_SETFL, fcntl(pipe_SERVER_reading_from_child[1], F_GETFL)| O_NONBLOCK);
+        fcntl(pipe_SERVER_writing_to_child[0], F_SETFL, fcntl(pipe_SERVER_writing_to_child[0], F_GETFL)| O_NONBLOCK);
+        fcntl(pipe_SERVER_writing_to_child[1], F_SETFL, fcntl(pipe_SERVER_writing_to_child[1], F_GETFL)| O_NONBLOCK);
 
         int pid = fork(); // Fork and create a child procress.
 
@@ -299,20 +306,7 @@ int main(int argc, char * argv[])
       // -------------------------- Child process. -------------------------- //
         else if (pid == 0)
         {
-          // Child process: poli users and SERVER
-
-          // Close unused pipes in CHILD.
-
-          /*
-
-          if ( (close(pipe_SERVER_reading_from_child[0]) < 0) || (close(pipe_SERVER_writing_to_child[1]) < 0) )
-          {
-            printf("ERROR: Failed to close unused SERVER pipes on child procress.\n");
-            exit(-1);
-          }
-
-          */
-
+          // Child process: poll users and SERVER
           char serverBuffer[MAX_MSG];
           char userBuffer[MAX_MSG];
           while (1)
@@ -327,7 +321,7 @@ int main(int argc, char * argv[])
             else if (serverStatus != -1)
             {
               // Message read from SERVER.
-              if (write(pipe_user_reading_from_server[1], serverBuffer, MAX_MSG) < 0)
+              if (write(pipe_child_writing_to_user[1], serverBuffer, MAX_MSG) < 0)
               {
                 printf("ERROR: Failed to write to USER: %s\n", user_id);
                 exit(-1);
@@ -342,7 +336,7 @@ int main(int argc, char * argv[])
 
           // -------------------------- Poll on USER. -------------------------- //
             memset(userBuffer, 0, sizeof(userBuffer));
-            int userStatus = read(pipe_user_writing_to_server[0], userBuffer, MAX_MSG);
+            int userStatus = read(pipe_child_reading_from_user[0], userBuffer, MAX_MSG);
             if ( (userStatus < 0) && (errno == EAGAIN) )
             {
               // No message to be read from USER. Pass.
@@ -371,25 +365,8 @@ int main(int argc, char * argv[])
       // -------------------------- Parent/SERVER process. -------------------------- //
         else
         {
-          // Make pipes NONBLOCKING.
-          fcntl(pipe_SERVER_reading_from_child[0], F_SETFL, fcntl(pipe_SERVER_reading_from_child[0], F_GETFL)| O_NONBLOCK);
-          fcntl(pipe_SERVER_reading_from_child[1], F_SETFL, fcntl(pipe_SERVER_reading_from_child[1], F_GETFL)| O_NONBLOCK);
-          fcntl(pipe_SERVER_writing_to_child[0], F_SETFL, fcntl(pipe_SERVER_writing_to_child[0], F_GETFL)| O_NONBLOCK);
-          fcntl(pipe_SERVER_writing_to_child[1], F_SETFL, fcntl(pipe_SERVER_writing_to_child[1], F_GETFL)| O_NONBLOCK);
           // Server process: Add a new user information into an empty slot
           add_user(idx, user_list, pid, user_id, pipe_SERVER_writing_to_child[1], pipe_SERVER_reading_from_child[0]);
-          // Close unused pipes in SERVER.
-
-          /*
-
-          if ( (close(pipe_SERVER_reading_from_child[1]) < 0) || (close(pipe_SERVER_writing_to_child[0]) < 0) )
-          {
-            printf("ERROR: Failed to close SERVER unused pipes on SERVER.\n");
-            return -1;
-          }
-
-          */
-
         }
       }
       // -------------------------- Finished establishing new user connection. -------------------------- //
