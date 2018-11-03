@@ -332,8 +332,6 @@ int main(int argc, char * argv[])
                 printf("ERROR: Failed to write to USER: %s\n", user_id);
                 exit(-1);
               }
-              printf("READ END: %d\n", pipe_user_reading_from_server[0]);
-              printf("WRITE END: %d\n", pipe_user_reading_from_server[1]);
             }
             else
             {
@@ -423,9 +421,9 @@ int main(int argc, char * argv[])
             printf("ERROR: Failed to write to USER: %s.\n", user_list[i].m_user_id);
             return -1;
           }
-          print_prompt("admin");
         }
       }
+      print_prompt("admin");
     }
     else
     {
@@ -455,24 +453,26 @@ int main(int argc, char * argv[])
             // Message read from CHILD.
             // Process user message/command.
 
-            printf("\n%s: %s", user_list[i].m_user_id, buffer);
-            print_prompt("admin");
-
-            /*
-
-            char * username;
-            char * text;
-            if ( (extract_name(buffer, username) != -1) && (extract_text(buffer, text) != -1) )
+            // FORMATTING TO LOOK NICE.
+            for (int i = 0; i < 10; i++)
             {
-              printf("%s: %s\n", username, text);
+              printf("\b"); // Removes and replaces the admin prompt with user message.
             }
-            else
-            {
-              printf("ERROR: Failed to process message from child.\n");
-              return -1;
-            }
+            printf("%s: %s", user_list[i].m_user_id, buffer);
+            print_prompt("admin"); // Prints admin prompt to screen again.
 
-            */
+            // Also broadcast message to all users, to enable chat.
+            for (int j = 0; j<MAX_USER; j++)
+            {
+              if (user_list[j].m_status != SLOT_EMPTY && user_list[j].m_user_id != user_list[i].m_user_id)
+              {
+                if (write(user_list[j].m_fd_to_user, buffer, MAX_MSG) < 0)
+                {
+                  printf("ERROR: Failed to write to USER: %s.\n", user_list[j].m_user_id);
+                  return -1;
+                }
+              }
+            }
 
           }
           else

@@ -20,13 +20,9 @@ void main(int argc, char * argv[]) {
 	int pipe_user_reading_from_server[2], pipe_user_writing_to_server[2];
 
 	// You will need to get user name as a parameter, argv[1].
-
 	if(connect_to_server(YOUR_UNIQUE_ID, argv[1], pipe_user_reading_from_server, pipe_user_writing_to_server) == -1) {
 		exit(-1);
 	}
-
-	printf("READ END: %d\n", pipe_user_reading_from_server[0]);
-	printf("WRITE END: %d\n", pipe_user_reading_from_server[1]);
 
 	// Set pipes to NONBLOCKING behaviour.
 	fcntl(pipe_user_reading_from_server[0], F_SETFL, fcntl(pipe_user_reading_from_server[0], F_GETFL)| O_NONBLOCK);
@@ -80,8 +76,14 @@ void main(int argc, char * argv[]) {
 			else if (childServerStatus != 0)
 			{
 				// Message received from STDIN.
-				printf("\nNOTICE: %s", childServerBuffer);
-				print_prompt(argv[1]);
+
+				// FORMATTING TO LOOK NICE.
+				for (int i = 0; i < strlen(argv[1])+5; i++)
+				{
+					printf("\b"); // Removes and replaces the user prompt with message from server.
+				}
+				printf("NOTICE: %s", childServerBuffer);
+				print_prompt(argv[1]); // Prints user prompt to screen again.
 			}
 			else
 			{
