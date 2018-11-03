@@ -71,7 +71,7 @@ void main(int argc, char * argv[]) {
 			char childServerBuffer[MAX_MSG];
 			memset(childServerBuffer, 0, sizeof(childServerBuffer));
 			int childServerStatus = read(pipe_user_reading_from_server[0], childServerBuffer, MAX_MSG);
-			printf("READ END: %d\n", pipe_user_reading_from_server[0]);
+		//	printf("READ END: %d\n", pipe_user_reading_from_server[0]);
 			//printf("status of STDIN: %d\n", status);
 			if ( (childServerStatus < 0) && (errno == EAGAIN) )
 			{
