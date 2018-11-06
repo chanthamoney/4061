@@ -94,9 +94,17 @@ int add_user(int idx, USER * user_list, int pid, char * user_id, int pipe_to_chi
  */
 void kill_user(int idx, USER * user_list) {
 	// kill a user (specified by idx) by using the systemcall kill()
+	// then call waitpid on the user
+  // kill a user (specified by idx) by using the systemcall kill()
   write(user_list[idx].m_fd_to_user, "You have been kicked from the server", MAX_MSG);
-  kill(user_list[idx].m_pid, SIGTERM);
+  int ret = kill(user_list[idx].m_pid, SIGTERM);
+  if ( ret == -1)
+  {
+    printf("FAILED TO KILL.\n");
+  }
   // then call waitpid on the user
+  int status;
+
   waitpid(user_list[idx].m_pid, &status, WNOHANG);
 }
 
@@ -247,27 +255,12 @@ int extract_text(char *buf, char * text)
  */
 void send_p2p_msg(int idx, USER * user_list, char *buf)
 {
+
 	// get the target user by name using extract_name() function
-  char user_name[MAX_USER_ID];
-  char text[MAX_MSG];
-  extract_name(buf, user_name);
-  extract_text(buf, text);
 	// find the user id using find_user_index()
-  int jdx = find_user_index(user_list, user_name);
 	// if user not found, write back to the original user "User not found", using the write()function on pipes.
-  if (jdx < 0)
-  {
-    write(user_list[idx].m_fd_to_user, "User not found", MAX_MSG);
-  }e
 	// if the user is found then write the message that the user wants to send to that user.
-  else
-  {
-    char message[MAX_MSG];
-    strcpy(message, user_name);
-    strcat(message, ": ");
-    strcat(message, text);
-    write(user_list[jdx].m_fd_to_user, message, MAX_MSG);
-  }
+
 }
 
 //takes in the filename of the file being executed, and prints an error message stating the commands and their usage
