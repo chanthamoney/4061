@@ -94,27 +94,10 @@ int add_user(int idx, USER * user_list, int pid, char * user_id, int pipe_to_chi
  */
 void kill_user(int idx, USER * user_list) {
 	// kill a user (specified by idx) by using the systemcall kill()
-	// then call waitpid on the user
-
-  /*
-
-  char * killCommand = "\exit";
-  write(user_list[idx].m_fd_to_user, killCommand, MAX_MSG);
-  int ret;
-  while(1)
-  { //find user pid.....
-    ret =waitpid(pid, status, WNOHANG); //WNOHANG wait with nonblocking?
-    if(pid==0) // means killing the child
-    {
-      kill(user_list[idx].m_pid, SIGINT);
-      exit(1);
-      //todo find pid of user
-    }
-    sleep(1000);
-  }
-
-  */
-
+  write(user_list[idx].m_fd_to_user, "You have been kicked from the server", MAX_MSG);
+  kill(user_list[idx].m_pid, SIGTERM);
+  // then call waitpid on the user
+  waitpid(user_list[idx].m_pid, &status, WNOHANG);
 }
 
 /*
@@ -123,10 +106,18 @@ void kill_user(int idx, USER * user_list) {
 void cleanup_user(int idx, USER * user_list)
 {
 	// m_pid should be set back to -1
+  user_list[idx].m_pid = -1;
 	// m_user_id should be set to zero, using memset()
+  memset(user_list[idx].m_user_id, 0, sizeof(user_list[idx].m_user_id));
 	// close all the fd
+  close(user_list[idx].m_fd_to_user);
+  close(user_list[idx].m_fd_to_server);
 	// set the value of all fd back to -1
+  user_list[idx].m_fd_to_user = -1;
+  user_list[idx].m_fd_to_server = -1;
 	// set the status back to empty
+  user_list[idx].m_status = SLOT_EMPTY;
+
 }
 
 /*
@@ -135,6 +126,8 @@ void cleanup_user(int idx, USER * user_list)
 void kick_user(int idx, USER * user_list) {
 	// should kill_user()
 	// then perform cleanup_user()
+  kill_user(idx, user_list);
+  cleanup_user(idx, user_list);
 }
 
 /*
@@ -147,9 +140,17 @@ int broadcast_msg(USER * user_list, char *buf, char *sender)
 	//return zero on success
   char message[MAX_MSG];
   memset(message, 0, sizeof(message));
-  strcpy(message, sender);
-  strcat(message, ": ");
-  strcat(message, buf);
+  if ((strcmp(sender, ""))!=0)
+  {
+    strcpy(message, sender);
+    strcat(message, ": ");
+    strcat(message, buf);
+  }
+  else
+  {
+    strcpy(message, "Notice: ");
+    strcat(message, buf);
+  }
 
   for (int i = 0; i<MAX_USER; i++)
   {
@@ -173,6 +174,13 @@ void cleanup_users(USER * user_list)
 {
 	// go over the user list and check for any empty slots
 	// call cleanup user for each of those users.
+  for (int i = 0; i < MAX_USER; i++)
+  {
+    if (user_list[i].m_status == SLOT_EMPTY)
+    {
+      cleanup_user(i, user_list);
+    }
+  }
 }
 
 /*
@@ -239,11 +247,27 @@ int extract_text(char *buf, char * text)
  */
 void send_p2p_msg(int idx, USER * user_list, char *buf)
 {
-
 	// get the target user by name using extract_name() function
+  char user_name[MAX_USER_ID];
+  char text[MAX_MSG];
+  extract_name(buf, user_name);
+  extract_text(buf, text);
 	// find the user id using find_user_index()
+  int jdx = find_user_index(user_list, user_name);
 	// if user not found, write back to the original user "User not found", using the write()function on pipes.
+  if (jdx < 0)
+  {
+    write(user_list[idx].m_fd_to_user, "User not found", MAX_MSG);
+  }e
 	// if the user is found then write the message that the user wants to send to that user.
+  else
+  {
+    char message[MAX_MSG];
+    strcpy(message, user_name);
+    strcat(message, ": ");
+    strcat(message, text);
+    write(user_list[jdx].m_fd_to_user, message, MAX_MSG);
+  }
 }
 
 //takes in the filename of the file being executed, and prints an error message stating the commands and their usage
@@ -308,10 +332,19 @@ int main(int argc, char * argv[])
     // Gets connections and internally creates the pipes for communication.
     if (get_connection(user_id, pipe_child_writing_to_user, pipe_child_reading_from_user) != -1)
     {
-      printf("\nUSER CONNECTED: %s\n", user_id);
+
       // Check max user and same user id
       int idx = find_empty_slot(user_list);
       if ( (idx != -1) && (find_user_index(user_list, user_id) < 0) )
+
+      // FORMATTING TO LOOK NICE.
+      for (int i = 0; i < 10; i++)
+      {
+        printf("\b"); // Removes and replaces the admin prompt with user message.
+      }
+      printf("USER CONNECTED: %s\n", user_id);
+      print_prompt("admin");
+
       // Insert new user if there is space available the user does not already exist.
       {
         // Create pipes from child to USER.
@@ -345,6 +378,14 @@ int main(int argc, char * argv[])
       // -------------------------- Child process. -------------------------- //
         else if (pid == 0)
         {
+          // Close unnecessary pipes.
+          // Close pipes connecting CHILD and USER.
+          close(pipe_child_reading_from_user[1]);
+          close(pipe_child_writing_to_user[0]);
+          // Close pipes connecting CHILD and SERVER.
+          close(pipe_SERVER_reading_from_child[0]);
+          close(pipe_SERVER_writing_to_child[1]);
+
           // Child process: poll users and SERVER
           char serverBuffer[MAX_MSG];
           char userBuffer[MAX_MSG];
@@ -406,6 +447,16 @@ int main(int argc, char * argv[])
         {
           // Server process: Add a new user information into an empty slot
           add_user(idx, user_list, pid, user_id, pipe_SERVER_writing_to_child[1], pipe_SERVER_reading_from_child[0]);
+
+          // Close unnecessary pipes.
+          // Close pipes connecting CHILD and USER.
+          close(pipe_child_reading_from_user[0]);
+          close(pipe_child_reading_from_user[1]);
+          close(pipe_child_writing_to_user[0]);
+          close(pipe_child_writing_to_user[1]);
+          // Close pipes connecting CHILD and SERVER.
+          close(pipe_SERVER_reading_from_child[1]);
+          close(pipe_SERVER_writing_to_child[0]);
         }
       }
       // -------------------------- Finished establishing new user connection. -------------------------- //
@@ -416,9 +467,7 @@ int main(int argc, char * argv[])
     // ---------------------------------------------------------------------- //
 		// Poll stdin (input from the terminal) and handle admnistrative command
     char stdinBuffer[MAX_MSG];
-    char message[MAX_MSG];
     memset(stdinBuffer, 0, sizeof(stdinBuffer));
-    memset(message, 0, sizeof(message));
     int status = read(0, stdinBuffer, MAX_MSG);
     //printf("status of STDIN: %d\n", status);
     if ( (status < 0) && (errno == EAGAIN) )
@@ -428,20 +477,34 @@ int main(int argc, char * argv[])
     else if (status != 0)
     {
       // Message received from STDIN.
-      // Send message to CHILD.
-      for (int i = 0; i<MAX_USER; i++)
+      int command = get_command_type(stdinBuffer);
+      if (command == LIST)
       {
-        // poll child processes and handle user commands
-        if (user_list[i].m_status != SLOT_EMPTY)
+        list_users(-1, user_list);
+      }
+      else if (command == KICK)
+      {
+        // get the username from the command line.
+        char * user_name;
+        extract_name(stdinBuffer, user_name);
+        // using the username, find the index.
+        int idx = find_user_index(user_list, user_name);
+        // call kick_user(), which kills the user at idx and cleans the user_list.
+        kick_user(idx, user_list);
+      }
+      else if (command == EXIT)
+      {
+        // kick all users and terminate the server.
+        for (int i = 0; i < MAX_USER; i++)
         {
-          strcpy(message, "Notice: ");
-          strcat(message, stdinBuffer);
-          if (write(user_list[i].m_fd_to_user, message, MAX_MSG) < 0)
-          {
-            printf("ERROR: Failed to write to USER: %s.\n", user_list[i].m_user_id);
-            return -1;
-          }
+          kick_user(i, user_list);
         }
+        return -1;
+      }
+      else
+      {
+        // broadcast message to CHILD.
+        broadcast_msg(user_list, stdinBuffer, "");
       }
       print_prompt("admin");
     }
@@ -472,17 +535,32 @@ int main(int argc, char * argv[])
           {
             // Message read from CHILD.
             // Process user message/command.
-
-            // FORMATTING TO LOOK NICE.
-            for (int i = 0; i < 10; i++)
+            int command = get_command_type(stdinBuffer);
+            if (command == LIST)
             {
-              printf("\b"); // Removes and replaces the admin prompt with user message.
+              list_users(i, user_list);
             }
-            printf("%s: %s", user_list[i].m_user_id, buffer);
-            print_prompt("admin"); // Prints admin prompt to screen again.
-
-            broadcast_msg(user_list, buffer, user_list[i].m_user_id);
-
+            else if (command == P2P)
+            {
+              // User wants to talk with another user privately.
+            }
+            else if (command == EXIT)
+            {
+              // User wants to exit.
+              kick_user(i, user_list);
+            }
+            else
+            {
+              // FORMATTING TO LOOK NICE.
+              for (int i = 0; i < 10; i++)
+              {
+                printf("\b"); // Removes and replaces the admin prompt with user message.
+              }
+              printf("%s: %s", user_list[i].m_user_id, buffer);
+              print_prompt("admin"); // Prints admin prompt to screen again.
+              // Sends message to all users from that user.
+              broadcast_msg(user_list, buffer, user_list[i].m_user_id);
+            }
           }
           else
           {
