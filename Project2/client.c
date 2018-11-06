@@ -84,7 +84,7 @@ void main(int argc, char * argv[]) {
 				{
 					printf("\b"); // Removes and replaces the user prompt with message from server.
 				}
-				printf("Server: %s", childServerBuffer);
+				printf("%s", childServerBuffer);
 				print_prompt(argv[1]); // Prints user prompt to screen again.
 			}
 			else

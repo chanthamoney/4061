@@ -95,6 +95,9 @@ int add_user(int idx, USER * user_list, int pid, char * user_id, int pipe_to_chi
 void kill_user(int idx, USER * user_list) {
 	// kill a user (specified by idx) by using the systemcall kill()
 	// then call waitpid on the user
+
+  /*
+
   char * killCommand = "\exit";
   write(user_list[idx].m_fd_to_user, killCommand, MAX_MSG);
   int ret;
@@ -109,6 +112,9 @@ void kill_user(int idx, USER * user_list) {
     }
     sleep(1000);
   }
+
+  */
+
 }
 
 /*
@@ -139,6 +145,24 @@ int broadcast_msg(USER * user_list, char *buf, char *sender)
 	//iterate over the user_list and if a slot is full, and the user is not the sender itself,
 	//then send the message to that user
 	//return zero on success
+  char message[MAX_MSG];
+  memset(message, 0, sizeof(message));
+  strcpy(message, sender);
+  strcat(message, ": ");
+  strcat(message, buf);
+
+  for (int i = 0; i<MAX_USER; i++)
+  {
+    if (user_list[i].m_status != SLOT_EMPTY && user_list[i].m_user_id != sender)
+    {
+      if (write(user_list[i].m_fd_to_user, message, MAX_MSG) < 0)
+      {
+        printf("ERROR: Failed to write to USER: %s.\n", user_list[i].m_user_id);
+        return -1;
+      }
+    }
+  }
+
 	return 0;
 }
 
@@ -392,7 +416,9 @@ int main(int argc, char * argv[])
     // ---------------------------------------------------------------------- //
 		// Poll stdin (input from the terminal) and handle admnistrative command
     char stdinBuffer[MAX_MSG];
+    char message[MAX_MSG];
     memset(stdinBuffer, 0, sizeof(stdinBuffer));
+    memset(message, 0, sizeof(message));
     int status = read(0, stdinBuffer, MAX_MSG);
     //printf("status of STDIN: %d\n", status);
     if ( (status < 0) && (errno == EAGAIN) )
@@ -408,7 +434,9 @@ int main(int argc, char * argv[])
         // poll child processes and handle user commands
         if (user_list[i].m_status != SLOT_EMPTY)
         {
-          if (write(user_list[i].m_fd_to_user, stdinBuffer, MAX_MSG) < 0)
+          strcpy(message, "Notice: ");
+          strcat(message, stdinBuffer);
+          if (write(user_list[i].m_fd_to_user, message, MAX_MSG) < 0)
           {
             printf("ERROR: Failed to write to USER: %s.\n", user_list[i].m_user_id);
             return -1;
@@ -453,18 +481,7 @@ int main(int argc, char * argv[])
             printf("%s: %s", user_list[i].m_user_id, buffer);
             print_prompt("admin"); // Prints admin prompt to screen again.
 
-            // Also broadcast message to all users, to enable chat.
-            for (int j = 0; j<MAX_USER; j++)
-            {
-              if (user_list[j].m_status != SLOT_EMPTY && user_list[j].m_user_id != user_list[i].m_user_id)
-              {
-                if (write(user_list[j].m_fd_to_user, buffer, MAX_MSG) < 0)
-                {
-                  printf("ERROR: Failed to write to USER: %s.\n", user_list[j].m_user_id);
-                  return -1;
-                }
-              }
-            }
+            broadcast_msg(user_list, buffer, user_list[i].m_user_id);
 
           }
           else
