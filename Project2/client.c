@@ -15,7 +15,7 @@
 /* -------------------------Main function for the client ----------------------*/
 void main(int argc, char * argv[]) {
 
-	char * YOUR_UNIQUE_ID = "CSCI_39";
+	char * YOUR_UNIQUE_ID = "CSCI4061_39";
 	int waitTime = 1000;
 	int pipe_user_reading_from_server[2], pipe_user_writing_to_server[2];
 
@@ -48,24 +48,26 @@ void main(int argc, char * argv[]) {
 		// Poll stdin (input from the terminal) and send it to server (child process) via pipe
 		memset(buf, 0, sizeof(buf));
 	    int stdinStatus = read(0, buf, MAX_MSG);
-	    //printf("status of STDIN: %d\n", status);
+	    	//printf("status of STDIN: %d\n", status);
 	    if ( (stdinStatus < 0) && (errno == EAGAIN) )
 	    {
-			// No message to be read from STDIN. Pass.
+				// No message to be read from STDIN. Pass.
 	    }
 	    else if (stdinStatus != 0)
 	    {
-			// Message received from STDIN.
-			if (write(pipe_user_writing_to_server[1], strtok(buf, "\n"), MAX_MSG) < 0)
-			{
-				printf("ERROR: Failed to write to CHILD process of SERVER.\n");
-			}
-			print_prompt(argv[1]);
+				// Message received from STDIN.
+				if (write(pipe_user_writing_to_server[1], strtok(buf, "\n"), MAX_MSG) < 0)
+				{
+					printf("ERROR: Failed to write to CHILD process of SERVER.\n");
+					exit(-1);
+				}
+				print_prompt(argv[1]);
 	    }
 	    else
 	    {
-			// ERROR occured.
-			printf("ERROR: Failed to read from STDIN.\n");
+				// ERROR occured.
+				printf("ERROR: Failed to read from STDIN.\n");
+				exit(-1);
 	    }
 
 
@@ -84,6 +86,10 @@ void main(int argc, char * argv[]) {
 		else if (childServerStatus == 0)
 		{
 			// Pipe closed! Terminate USER!
+			for (int i = 0; i < strlen(argv[1])+5; i++)
+			{
+				printf("\b"); // Removes and replaces the user prompt with message from server.
+			}
 			exit(0);
 		}
 		else if (childServerStatus != 0)
@@ -91,18 +97,30 @@ void main(int argc, char * argv[]) {
 			// Message received from STDIN.
 
 			// FORMATTING TO LOOK NICE.
-			for (int i = 0; i < strlen(argv[1])+5; i++)
+			// BEWARE YOUR EYES. THIS IS BRUTE FORCE CODING.
+			int length = strlen(argv[1])+5;
+			for (int i = 0; i < length; i++)
 			{
-				printf("\b"); // Removes and replaces the user prompt with message from server.
+				printf("\b");
 			}
+			for (int i = 0; i < length; i++)
+			{
+				printf(" ");
+			}
+			for (int i = 0; i < length; i++)
+			{
+				printf("\b");
+			}
+			// END OF FORMATTING.
 
-			printf("%s\n", buf);
+			printf("%s\n", buf); // Print message.
 			print_prompt(argv[1]); // Prints user prompt to screen again.
 		}
 		else
 		{
 			// ERROR occured.
 			printf("ERROR: Failed to read from STDIN.\n");
+			exit(-1);
 		}
 
 		/* -------------- YOUR CODE ENDS HERE -----------------------------------*/

@@ -59,7 +59,7 @@ int list_users(int idx, USER * user_list)
 	}
 
 	if(idx < 0) {
-		printf(buf);
+		printf("%s", buf);
 		printf("\n");
 	} else {
 		/* write to the given pipe fd */
@@ -96,10 +96,10 @@ void kill_user(int idx, USER * user_list) {
 	// then call waitpid on the user
 	// kill a user (specified by idx) by using the systemcall kill()
 
-	int ret = kill(user_list[idx].m_pid, SIGKILL);
+	int ret = kill(user_list[idx].m_pid, SIGTERM);
 	if (ret == -1)
 	{
-		printf("FAILED TO KILL.\n");
+		perror("CRITICAL ERROR: CANNOT KICK USER\n");
 	}
 	// then call waitpid on the user
 	int status;
@@ -129,10 +129,17 @@ void cleanup_user(int idx, USER * user_list)
  * Kills the user and performs cleanup
  */
 void kick_user(int idx, USER * user_list) {
-	// should kill_user()
-	// then perform cleanup_user()
-	kill_user(idx, user_list);
-	cleanup_user(idx, user_list);
+  if (idx < 0)
+  {
+    printf("Cannot find user\n");
+  }
+  else
+  {
+    // should kill_user()
+    kill_user(idx, user_list);
+    // then perform cleanup_user()
+    cleanup_user(idx, user_list);
+  }
 }
 
 /*
@@ -153,7 +160,7 @@ int broadcast_msg(USER * user_list, char *buf, char *sender)
 	}
 	else
 	{
-		strcpy(message, "Notice: ");
+		strcpy(message, "ADMIN-NOTICE: ");
 		strcat(message, buf);
 	}
 
@@ -234,12 +241,17 @@ int extract_text(char *buf, char * text)
 {
     char inbuf[MAX_MSG];
     char * tokens[16];
+    char * s = NULL;
     strcpy(inbuf, buf);
 
-    int token_cnt = parse_line(buf, tokens, " ");
+    int token_cnt = parse_line(inbuf, tokens, " ");
 
     if(token_cnt >= 3) {
-        strcpy(text, tokens[2]);
+        //Find " "
+        s = strchr(buf, ' ');
+        s = strchr(s+1, ' ');
+
+        strcpy(text, s+1);
         return 0;
     }
 
@@ -253,6 +265,7 @@ void send_p2p_msg(int idx, USER * user_list, char *buf)
 {
 	// get the target user by name using extract_name() function
 	char user_name[MAX_USER_ID];
+  memset(user_name, 0, sizeof(user_name));
 	extract_name(buf, user_name);
 	// find the user id using find_user_index()
 	int jdx = find_user_index(user_list, user_name);
@@ -264,7 +277,13 @@ void send_p2p_msg(int idx, USER * user_list, char *buf)
 	// if the user is found then write the message that the user wants to send to that user.
 	else
 	{
-		write(user_list[jdx].m_fd_to_user, buf, MAX_MSG);
+    char text[MAX_MSG];
+    extract_text(buf, text);
+    char message[MAX_MSG];
+    strcpy(message, user_list[idx].m_user_id);
+    strcat(message, ": ");
+		strcat(message, text);
+		write(user_list[jdx].m_fd_to_user, message, MAX_MSG);
 	}
 }
 
@@ -301,7 +320,7 @@ void init_user_list(USER * user_list) {
 int main(int argc, char * argv[])
 {
   int waitTime = 1000;
-  char * YOUR_UNIQUE_ID = "CSCI_39";
+  char * YOUR_UNIQUE_ID = "CSCI4061_39";
 	int nbytes;
 	setup_connection(YOUR_UNIQUE_ID); // Specifies the connection point as argument.
 
@@ -334,7 +353,8 @@ int main(int argc, char * argv[])
 		{
 			// Check max user and same user id
 			int idx = find_empty_slot(user_list);
-			if ( (idx != -1) && (find_user_index(user_list, user_id) < 0) )
+      int existence = find_user_index(user_list, user_id);
+			if ( (idx != -1) && (existence < 0) )
 			{
 
 				// FORMATTING TO LOOK NICE.
@@ -454,6 +474,32 @@ int main(int argc, char * argv[])
 				}
 				// ---------------------------------------------------------------------------- //
 			}
+      else
+      {
+        if (idx == -1)
+        {
+          // Send message to USER that SEVER canot accept any more users.
+          write(pipe_child_writing_to_user[1], "Server is full", MAX_MSG);
+          // Close pipes.
+          // Closing these pipes will trigger the EOF in the USER when reading.
+          close(pipe_child_reading_from_user[0]);
+					close(pipe_child_reading_from_user[1]);
+					close(pipe_child_writing_to_user[0]);
+					close(pipe_child_writing_to_user[1]);
+        }
+        else
+        {
+          // Send message to USER that there already exists a user with the same name.
+          // Send message to USER that SEVER canot accept any more users.
+          write(pipe_child_writing_to_user[1], "User name already exists", MAX_MSG);
+          // Close pipes.
+          // Closing these pipes will trigger the EOF in the USER when reading.
+          close(pipe_child_reading_from_user[0]);
+					close(pipe_child_reading_from_user[1]);
+					close(pipe_child_writing_to_user[0]);
+					close(pipe_child_writing_to_user[1]);
+        }
+      }
 		}
 
 
@@ -487,7 +533,10 @@ int main(int argc, char * argv[])
 					// Kick all users and terminate the server.
 					for (int i = 0; i < MAX_USER; i++)
 					{
-						kick_user(i, user_list);
+            if (user_list[i].m_status == SLOT_FULL)
+            {
+              kick_user(i, user_list);
+            }
 					}
 					// Kill self.
 					return 0;
@@ -523,9 +572,8 @@ int main(int argc, char * argv[])
 				}
 				else if (status != -1)
 				{
-					// Message read from CHILD.
+          // Message read from CHILD.
 					// Process user message/command.
-
 					switch(get_command_type(buf))
 					{
 						case LIST:
@@ -542,13 +590,23 @@ int main(int argc, char * argv[])
 							kick_user(i, user_list);
 							break;
 						default:
-							// FORMATTING TO LOOK NICE.
-							for (int i = 0; i < 10; i++)
-							{
-								printf("\b"); // Removes and replaces the admin prompt with user message.
-							}
+              // FORMATTING TO LOOK NICE.
+              // BEWARE YOUR EYES. THIS IS BRUTE FORCE CODING.
+        			for (int i = 0; i < 10; i++)
+        			{
+        				printf("\b");
+        			}
+        			for (int i = 0; i < 10; i++)
+        			{
+        				printf(" ");
+        			}
+        			for (int i = 0; i < 10; i++)
+        			{
+        				printf("\b");
+        			}
+              // END OF FORMATTING.
 
-							printf("%s: %s\n", user_list[i].m_user_id, buf);
+							printf("%s: %s\n", user_list[i].m_user_id, buf); // Print message.
 							print_prompt("admin"); // Prints admin prompt to screen again.
 
 							broadcast_msg(user_list, buf, user_list[i].m_user_id);
@@ -559,6 +617,7 @@ int main(int argc, char * argv[])
 				{
 					// ERROR occured.
 					printf("ERROR: Failed to read from CHILD: %s.\n", user_id);
+          return -1;
 				}
 			}
 		}
