@@ -313,6 +313,16 @@ void init_user_list(USER * user_list) {
 	}
 }
 
+void cleanup_error(USER * user_list) {
+  for (int i = 0; i < MAX_USER; i++)
+  {
+    if (user_list[i].m_status == SLOT_FULL)
+    {
+      kick_user(i, user_list);
+    }
+  }
+}
+
 /* ---------------------End of the functions that implementServer functionality -----------------*/
 
 
@@ -390,6 +400,7 @@ int main(int argc, char * argv[])
 				if (pid < 0)
 				{
 				  printf("ERROR: Failed to fork.\n");
+          cleanup_error(user_list);
 				  return -1;
 				}
 				// -------------------------------------------------------------------- //
@@ -551,6 +562,7 @@ int main(int argc, char * argv[])
 		{
 			// ERROR occured.
 			printf("ERROR: Failed to read from STDIN.\n");
+      cleanup_error(user_list);
 			return -1;
 		}
 
@@ -617,6 +629,7 @@ int main(int argc, char * argv[])
 				{
 					// ERROR occured.
 					printf("ERROR: Failed to read from CHILD: %s.\n", user_id);
+          cleanup_error(user_list);
           return -1;
 				}
 			}

@@ -15,6 +15,12 @@
 /* -------------------------Main function for the client ----------------------*/
 void main(int argc, char * argv[]) {
 
+	if (argc < 2)
+	{
+		printf("Missing username\n");
+		exit(-1);
+	}
+
 	char * YOUR_UNIQUE_ID = "CSCI4061_39";
 	int waitTime = 1000;
 	int pipe_user_reading_from_server[2], pipe_user_writing_to_server[2];
