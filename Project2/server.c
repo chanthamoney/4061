@@ -77,14 +77,13 @@ int add_user(int idx, USER * user_list, int pid, char * user_id, int pipe_to_chi
 {
 	// populate the user_list structure with the arguments passed to this function
 	// return the index of user added
-
-  USER newUser = {};
-  newUser.m_pid = pid;
-  strcpy(newUser.m_user_id, user_id);
-  newUser.m_fd_to_user = pipe_to_child;
-  newUser.m_fd_to_server = pipe_to_parent;
-  newUser.m_status = SLOT_FULL;
-  user_list[idx] = newUser;
+	USER newUser = {};
+	newUser.m_pid = pid;
+	strcpy(newUser.m_user_id, user_id);
+	newUser.m_fd_to_user = pipe_to_child;
+	newUser.m_fd_to_server = pipe_to_parent;
+	newUser.m_status = SLOT_FULL;
+	user_list[idx] = newUser;
 
 	return idx;
 }
@@ -95,6 +94,16 @@ int add_user(int idx, USER * user_list, int pid, char * user_id, int pipe_to_chi
 void kill_user(int idx, USER * user_list) {
 	// kill a user (specified by idx) by using the systemcall kill()
 	// then call waitpid on the user
+	// kill a user (specified by idx) by using the systemcall kill()
+
+	int ret = kill(user_list[idx].m_pid, SIGKILL);
+	if (ret == -1)
+	{
+		printf("FAILED TO KILL.\n");
+	}
+	// then call waitpid on the user
+	int status;
+	waitpid(user_list[idx].m_pid, &status, WNOHANG);
 }
 
 /*
@@ -103,10 +112,17 @@ void kill_user(int idx, USER * user_list) {
 void cleanup_user(int idx, USER * user_list)
 {
 	// m_pid should be set back to -1
+	user_list[idx].m_pid = -1;
 	// m_user_id should be set to zero, using memset()
+	memset(user_list[idx].m_user_id, 0, sizeof(user_list[idx].m_user_id));
 	// close all the fd
+	close(user_list[idx].m_fd_to_user);
+	close(user_list[idx].m_fd_to_server);
 	// set the value of all fd back to -1
+	user_list[idx].m_fd_to_user = -1;
+	user_list[idx].m_fd_to_server = -1;
 	// set the status back to empty
+	user_list[idx].m_status = SLOT_EMPTY;
 }
 
 /*
@@ -115,6 +131,8 @@ void cleanup_user(int idx, USER * user_list)
 void kick_user(int idx, USER * user_list) {
 	// should kill_user()
 	// then perform cleanup_user()
+	kill_user(idx, user_list);
+	cleanup_user(idx, user_list);
 }
 
 /*
@@ -125,6 +143,31 @@ int broadcast_msg(USER * user_list, char *buf, char *sender)
 	//iterate over the user_list and if a slot is full, and the user is not the sender itself,
 	//then send the message to that user
 	//return zero on success
+	char message[MAX_MSG];
+	memset(message, 0, sizeof(message));
+	if ((strcmp(sender, ""))!=0)
+	{
+		strcpy(message, sender);
+		strcat(message, ": ");
+		strcat(message, buf);
+	}
+	else
+	{
+		strcpy(message, "Notice: ");
+		strcat(message, buf);
+	}
+
+	for (int i = 0; i<MAX_USER; i++)
+	{
+		if (user_list[i].m_status != SLOT_EMPTY && user_list[i].m_user_id != sender)
+		{
+			if (write(user_list[i].m_fd_to_user, message, MAX_MSG) < 0)
+			{
+				return -1;
+			}
+		}
+	}
+
 	return 0;
 }
 
@@ -135,6 +178,13 @@ void cleanup_users(USER * user_list)
 {
 	// go over the user list and check for any empty slots
 	// call cleanup user for each of those users.
+	for (int i = 0; i < MAX_USER; i++)
+	{
+		if (user_list[i].m_status == SLOT_EMPTY)
+		{
+			cleanup_user(i, user_list);
+		}
+	}
 }
 
 /*
@@ -201,16 +251,27 @@ int extract_text(char *buf, char * text)
  */
 void send_p2p_msg(int idx, USER * user_list, char *buf)
 {
-
 	// get the target user by name using extract_name() function
+	char user_name[MAX_USER_ID];
+	extract_name(buf, user_name);
 	// find the user id using find_user_index()
+	int jdx = find_user_index(user_list, user_name);
 	// if user not found, write back to the original user "User not found", using the write()function on pipes.
+	if (jdx == -1)
+	{
+		write(user_list[idx].m_fd_to_user, "User not found", MAX_MSG);
+	}
 	// if the user is found then write the message that the user wants to send to that user.
+	else
+	{
+		write(user_list[jdx].m_fd_to_user, buf, MAX_MSG);
+	}
 }
 
 //takes in the filename of the file being executed, and prints an error message stating the commands and their usage
 void show_error_message(char *filename)
 {
+	// TO DO.
 }
 
 
@@ -258,210 +319,251 @@ int main(int argc, char * argv[])
 		// Handling a new connection using get_connection
 		int pipe_SERVER_reading_from_child[2];
 		int pipe_SERVER_writing_to_child[2];
-    int pipe_child_reading_from_user[2];
-    int pipe_child_writing_to_user[2];
+		int pipe_child_reading_from_user[2];
+		int pipe_child_writing_to_user[2];
 
 		char user_id[MAX_USER_ID];
 
-  // ------------------------------------------------------------------------------------ //
-  // -------------------------- POLL FOR NEW USER CONNECTIONS. -------------------------- //
-  // ------------------------------------------------------------------------------------ //
-    // Gets connections and internally creates the pipes for communication.
-    if (get_connection(user_id, pipe_child_writing_to_user, pipe_child_reading_from_user) != -1)
-    {
-      printf("\nUSER CONNECTED: %s\n", user_id);
-      // Check max user and same user id
-      int idx = find_empty_slot(user_list);
-      if ( (idx != -1) && (find_user_index(user_list, user_id) < 0) )
-      // Insert new user if there is space available the user does not already exist.
-      {
-        // Create pipes from child to USER.
-        // Error checking is done on every system call.
-        // Error check when creating pipes.
-        if ( (pipe(pipe_SERVER_reading_from_child) < 0) || (pipe(pipe_SERVER_writing_to_child) < 0) ) {
-          printf("ERROR: Failed to create pipes for USER: %s.\n", user_id);
-          return(-1);
-        }
 
-        // Set CHILD-TO-USER pipes to NONBLOCKING behaviour.
-        fcntl(pipe_child_reading_from_user[0], F_SETFL, fcntl(pipe_child_reading_from_user[0], F_GETFL)| O_NONBLOCK);
-        fcntl(pipe_child_reading_from_user[1], F_SETFL, fcntl(pipe_child_reading_from_user[1], F_GETFL)| O_NONBLOCK);
-        fcntl(pipe_child_writing_to_user[0], F_SETFL, fcntl(pipe_child_writing_to_user[0], F_GETFL)| O_NONBLOCK);
-        fcntl(pipe_child_writing_to_user[1], F_SETFL, fcntl(pipe_child_writing_to_user[1], F_GETFL)| O_NONBLOCK);
-        // Make CHILD-TO-SERVER pipes to NONBLOCKING behaviour.
-        fcntl(pipe_SERVER_reading_from_child[0], F_SETFL, fcntl(pipe_SERVER_reading_from_child[0], F_GETFL)| O_NONBLOCK);
-        fcntl(pipe_SERVER_reading_from_child[1], F_SETFL, fcntl(pipe_SERVER_reading_from_child[1], F_GETFL)| O_NONBLOCK);
-        fcntl(pipe_SERVER_writing_to_child[0], F_SETFL, fcntl(pipe_SERVER_writing_to_child[0], F_GETFL)| O_NONBLOCK);
-        fcntl(pipe_SERVER_writing_to_child[1], F_SETFL, fcntl(pipe_SERVER_writing_to_child[1], F_GETFL)| O_NONBLOCK);
+		// ------------------------------------------------------------------------------------ //
+		// -------------------------- POLL FOR NEW USER CONNECTIONS. -------------------------- //
+		// ------------------------------------------------------------------------------------ //
 
-        int pid = fork(); // Fork and create a child procress.
+		// Gets connections and internally creates the pipes for communication.
+		if (get_connection(user_id, pipe_child_writing_to_user, pipe_child_reading_from_user) != -1)
+		{
+			// Check max user and same user id
+			int idx = find_empty_slot(user_list);
+			if ( (idx != -1) && (find_user_index(user_list, user_id) < 0) )
+			{
 
-        // ERROR.
-        if (pid < 0)
-        {
-          printf("ERROR: Failed to fork.\n");
-          return -1;
-        }
+				// FORMATTING TO LOOK NICE.
+				for (int i = 0; i < 10; i++)
+				{
+					printf("\b"); // Removes and replaces the admin prompt with user message.
+				}
+				printf("USER CONNECTED: %s\n", user_id);
+				print_prompt("admin");
 
-      // -------------------------- Child process. -------------------------- //
-        else if (pid == 0)
-        {
-          // Child process: poll users and SERVER
-          char serverBuffer[MAX_MSG];
-          char userBuffer[MAX_MSG];
-          while (1)
-          {
-          // -------------------------- Poll on SERVER. -------------------------- //
-            memset(serverBuffer, 0, sizeof(serverBuffer));
-            int serverStatus = read(pipe_SERVER_writing_to_child[0], serverBuffer, MAX_MSG);
-            if ( (serverStatus < 0) && (errno == EAGAIN) )
-            {
-              // No message to be read from SERVER. Pass.
-            }
-            else if (serverStatus != -1)
-            {
-              // Message read from SERVER.
-              if (write(pipe_child_writing_to_user[1], serverBuffer, MAX_MSG) < 0)
-              {
-                printf("ERROR: Failed to write to USER: %s\n", user_id);
-                exit(-1);
-              }
-            }
-            else
-            {
-              // ERROR occured.
-              printf("ERROR: Failed to read from SERVER.\n");
-              exit(-1);
-            }
+				// Insert new user if there is space available the user does not already exist.
+				// Create pipes from child to USER.
+				if ( (pipe(pipe_SERVER_reading_from_child) < 0) || (pipe(pipe_SERVER_writing_to_child) < 0) )
+				{
+					printf("ERROR: Failed to create pipes for USER: %s.\n", user_id);
+					return(-1);
+				}
 
-          // -------------------------- Poll on USER. -------------------------- //
-            memset(userBuffer, 0, sizeof(userBuffer));
-            int userStatus = read(pipe_child_reading_from_user[0], userBuffer, MAX_MSG);
-            if ( (userStatus < 0) && (errno == EAGAIN) )
-            {
-              // No message to be read from USER. Pass.
-            }
-            else if (userStatus != -1)
-            {
-              // Message read from USER.
-              // Forward to SERVER for procressing.
-              if (write(pipe_SERVER_reading_from_child[1], userBuffer, MAX_MSG) < 0)
-              {
-                printf("ERROR: Failed to write to SERVER.\n");
-                exit(-1);
-              }
-            }
-            else
-            {
-              // ERROR occured.
-              printf("ERROR: Failed to read from USER: %s.\n", user_id);
-              exit(-1);
-            }
+				// Set CHILD-TO-USER pipes to NONBLOCKING behaviour.
+				fcntl(pipe_child_reading_from_user[0], F_SETFL, fcntl(pipe_child_reading_from_user[0], F_GETFL)| O_NONBLOCK);
+				fcntl(pipe_child_reading_from_user[1], F_SETFL, fcntl(pipe_child_reading_from_user[1], F_GETFL)| O_NONBLOCK);
+				fcntl(pipe_child_writing_to_user[0], F_SETFL, fcntl(pipe_child_writing_to_user[0], F_GETFL)| O_NONBLOCK);
+				fcntl(pipe_child_writing_to_user[1], F_SETFL, fcntl(pipe_child_writing_to_user[1], F_GETFL)| O_NONBLOCK);
+				// Make CHILD-TO-SERVER pipes to NONBLOCKING behaviour.
+				fcntl(pipe_SERVER_reading_from_child[0], F_SETFL, fcntl(pipe_SERVER_reading_from_child[0], F_GETFL)| O_NONBLOCK);
+				fcntl(pipe_SERVER_reading_from_child[1], F_SETFL, fcntl(pipe_SERVER_reading_from_child[1], F_GETFL)| O_NONBLOCK);
+				fcntl(pipe_SERVER_writing_to_child[0], F_SETFL, fcntl(pipe_SERVER_writing_to_child[0], F_GETFL)| O_NONBLOCK);
+				fcntl(pipe_SERVER_writing_to_child[1], F_SETFL, fcntl(pipe_SERVER_writing_to_child[1], F_GETFL)| O_NONBLOCK);
 
-            usleep(waitTime);
-          }
-        }
+				int pid = fork(); // Fork and create a child procress.
 
-      // -------------------------- Parent/SERVER process. -------------------------- //
-        else
-        {
-          // Server process: Add a new user information into an empty slot
-          add_user(idx, user_list, pid, user_id, pipe_SERVER_writing_to_child[1], pipe_SERVER_reading_from_child[0]);
-        }
-      }
-      // -------------------------- Finished establishing new user connection. -------------------------- //
-    }
+				// ERROR.
+				if (pid < 0)
+				{
+				  printf("ERROR: Failed to fork.\n");
+				  return -1;
+				}
+				// -------------------------------------------------------------------- //
+				// -------------------------- Child process. -------------------------- //
+				else if (pid == 0)
+				{
+					// Close unused pipes in CHILD-TO-USER.
+					close(pipe_child_reading_from_user[1]);
+					close(pipe_child_writing_to_user[0]);
+					// Close unused pipes in CHILD-TO-SERVER.
+					close(pipe_SERVER_reading_from_child[0]);
+					close(pipe_SERVER_writing_to_child[1]);
 
-    // ---------------------------------------------------------------------- //
-    // -------------------------- POLL FROM STDIN. -------------------------- //
-    // ---------------------------------------------------------------------- //
+					// Child process: poll users and SERVER
+					while (1)
+					{
+						// -------------------------- Poll on SERVER. -------------------------- //
+						memset(buf, 0, sizeof(buf));
+						int serverStatus = read(pipe_SERVER_writing_to_child[0], buf, MAX_MSG);
+						if ( (serverStatus < 0) && (errno == EAGAIN) )
+						{
+							// No message to be read from SERVER. Pass.
+						}
+						else if (serverStatus != -1)
+						{
+							// Message read from SERVER.
+							if (write(pipe_child_writing_to_user[1], buf, MAX_MSG) < 0)
+							{
+								printf("ERROR: Failed to write to USER: %s\n", user_id);
+								exit(-1);
+							}
+						}
+						else
+						{
+							// ERROR occured.
+							printf("ERROR: Failed to read from SERVER.\n");
+							exit(-1);
+						}
+
+						// -------------------------- Poll on USER. -------------------------- //
+						memset(buf, 0, sizeof(buf));
+						int userStatus = read(pipe_child_reading_from_user[0], buf, MAX_MSG);
+						if ( (userStatus < 0) && (errno == EAGAIN) )
+						{
+						  // No message to be read from USER. Pass.
+						}
+						else if (userStatus != -1)
+						{
+							// Message read from USER.
+							// Forward to SERVER for procressing.
+							if (write(pipe_SERVER_reading_from_child[1], buf, MAX_MSG) < 0)
+							{
+								printf("ERROR: Failed to write to SERVER.\n");
+								exit(-1);
+							}
+						}
+						else
+						{
+							// ERROR occured.
+							printf("ERROR: Failed to read from USER: %s.\n", user_id);
+							exit(-1);
+						}
+
+					usleep(waitTime);
+					}
+				}
+				// -------------------------------------------------------------------- //
+
+				// -------------------------- Parent/SERVER process. -------------------------- //
+				else
+				{
+					// Server process: Add a new user information into an empty slot
+					add_user(idx, user_list, pid, user_id, pipe_SERVER_writing_to_child[1], pipe_SERVER_reading_from_child[0]);
+					// Close unused pipes in CHILD-TO-USER.
+					close(pipe_child_reading_from_user[0]);
+					close(pipe_child_reading_from_user[1]);
+					close(pipe_child_writing_to_user[0]);
+					close(pipe_child_writing_to_user[1]);
+					// Close unused pipes in CHILD-TO-SERVER.
+					close(pipe_SERVER_reading_from_child[1]);
+					close(pipe_SERVER_writing_to_child[0]);
+				}
+				// ---------------------------------------------------------------------------- //
+			}
+		}
+
+
+		// ---------------------------------------------------------------------- //
+		// -------------------------- POLL FROM STDIN. -------------------------- //
+		// ---------------------------------------------------------------------- //
+
 		// Poll stdin (input from the terminal) and handle admnistrative command
-    char stdinBuffer[MAX_MSG];
-    memset(stdinBuffer, 0, sizeof(stdinBuffer));
-    int status = read(0, stdinBuffer, MAX_MSG);
-    //printf("status of STDIN: %d\n", status);
-    if ( (status < 0) && (errno == EAGAIN) )
-    {
-      // No message to be read from STDIN. Pass.
-    }
-    else if (status != 0)
-    {
-      // Message received from STDIN.
-      // Send message to CHILD.
-      for (int i = 0; i<MAX_USER; i++)
-      {
-        // poll child processes and handle user commands
-        if (user_list[i].m_status != SLOT_EMPTY)
-        {
-          if (write(user_list[i].m_fd_to_user, stdinBuffer, MAX_MSG) < 0)
-          {
-            printf("ERROR: Failed to write to USER: %s.\n", user_list[i].m_user_id);
-            return -1;
-          }
-        }
-      }
-      print_prompt("admin");
-    }
-    else
-    {
-      // ERROR occured.
-      printf("ERROR: Failed to read from STDIN.\n");
-      return -1;
-    }
+		memset(buf, 0, sizeof(buf));
+		int status = read(0, buf, MAX_MSG);
+		if ( (status < 0) && (errno == EAGAIN) )
+		{
+			// No message to be read from STDIN. Pass.
+		}
+		else if (status != 0)
+		{
+      char user_name[MAX_USER_ID];
+			// Message received from STDIN.
+			switch(get_command_type(strtok(buf, "\n")))
+			{
+				case LIST:
+					// Server requests listing of all users.
+					list_users(-1, user_list);
+					break;
+				case KICK:
+					// Kick user.
+					extract_name(strtok(buf, "\n"), user_name);
+					kick_user(find_user_index(user_list, user_name), user_list);
+					break;
+				case EXIT:
+					// Kick all users and terminate the server.
+					for (int i = 0; i < MAX_USER; i++)
+					{
+						kick_user(i, user_list);
+					}
+					// Kill self.
+					return 0;
+				default:
+					// Send a notice to all users.
+					broadcast_msg(user_list, strtok(buf, "\n"), "");
+					break;
+			}
+			print_prompt("admin"); // Prints admin prompt to screen again.
+		}
+		else
+		{
+			// ERROR occured.
+			printf("ERROR: Failed to read from STDIN.\n");
+			return -1;
+		}
 
 
-    // --------------------------------------------------------------------------------- //
-    // -------------------------- POLL FROM CHILD PROCRESSES. -------------------------- //
-    // --------------------------------------------------------------------------------- //
-    for (int i = 0; i<MAX_USER; i++)
-    {
-		    // poll child processes and handle user commands
-        if (user_list[i].m_status != SLOT_EMPTY)
-        {
-          char buffer[MAX_MSG];
-          memset(buffer, 0, sizeof(buffer));
-          int status = read(user_list[i].m_fd_to_server, buffer, MAX_MSG);
-          if ( (status < 0) && (errno == EAGAIN) )
-          {
-            // No message to be read from CHILD. Pass.
-          }
-          else if (status != -1)
-          {
-            // Message read from CHILD.
-            // Process user message/command.
+		// --------------------------------------------------------------------------------- //
+		// -------------------------- POLL FROM CHILD PROCRESSES. -------------------------- //
+		// --------------------------------------------------------------------------------- //
 
-            // FORMATTING TO LOOK NICE.
-            for (int i = 0; i < 10; i++)
-            {
-              printf("\b"); // Removes and replaces the admin prompt with user message.
-            }
-            printf("%s: %s", user_list[i].m_user_id, buffer);
-            print_prompt("admin"); // Prints admin prompt to screen again.
+		for (int i = 0; i<MAX_USER; i++)
+		{
+			// poll child processes and handle user commands
+			if (user_list[i].m_status != SLOT_EMPTY)
+			{
+				memset(buf, 0, sizeof(buf));
+				int status = read(user_list[i].m_fd_to_server, buf, MAX_MSG);
+				if ( (status < 0) && (errno == EAGAIN) )
+				{
+					// No message to be read from CHILD. Pass.
+				}
+				else if (status != -1)
+				{
+					// Message read from CHILD.
+					// Process user message/command.
 
-            // Also broadcast message to all users, to enable chat.
-            for (int j = 0; j<MAX_USER; j++)
-            {
-              if (user_list[j].m_status != SLOT_EMPTY && user_list[j].m_user_id != user_list[i].m_user_id)
-              {
-                if (write(user_list[j].m_fd_to_user, buffer, MAX_MSG) < 0)
-                {
-                  printf("ERROR: Failed to write to USER: %s.\n", user_list[j].m_user_id);
-                  return -1;
-                }
-              }
-            }
+					switch(get_command_type(buf))
+					{
+						case LIST:
+							// Server requests listing of all users.
+							list_users(i, user_list);
+							break;
+						case P2P:
+							// Communicate with another user that the receiving user requested for.
+							// Extract name.
+							send_p2p_msg(i, user_list, buf);
+							break;
+						case EXIT:
+							// Kick the user, because they want to exit.
+							kick_user(i, user_list);
+							break;
+						default:
+							// FORMATTING TO LOOK NICE.
+							for (int i = 0; i < 10; i++)
+							{
+								printf("\b"); // Removes and replaces the admin prompt with user message.
+							}
 
-          }
-          else
-          {
-            // ERROR occured.
-            printf("ERROR: Failed to read from CHILD: %s.\n", user_id);
-          }
-        }
-    }
+							printf("%s: %s\n", user_list[i].m_user_id, buf);
+							print_prompt("admin"); // Prints admin prompt to screen again.
 
-    usleep(waitTime);
+							broadcast_msg(user_list, buf, user_list[i].m_user_id);
+							break;
+					}
+				}
+				else
+				{
+					// ERROR occured.
+					printf("ERROR: Failed to read from CHILD: %s.\n", user_id);
+				}
+			}
+		}
 
+		usleep(waitTime);
 		/* ------------------------YOUR CODE FOR MAIN--------------------------------*/
 	}
 }
