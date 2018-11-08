@@ -59,7 +59,7 @@ int list_users(int idx, USER * user_list)
 	}
 
 	if(idx < 0) {
-		printf(buf);
+		printf("%s", buf);
 		printf("\n");
 	} else {
 		/* write to the given pipe fd */
@@ -100,10 +100,11 @@ void kill_user(int idx, USER * user_list) {
   int ret = kill(user_list[idx].m_pid, SIGTERM);
   if (ret == -1)
   {
-    printf("FAILED TO KILL.\n");
+    printf("FAILED TO KILL.\n"); //PERROR
   }
   // then call waitpid on the user
   int status;
+  printf("this is user %s\n", user_list[idx].m_user_id);
   waitpid(user_list[idx].m_pid, &status, WNOHANG);
 }
 
@@ -258,6 +259,9 @@ void send_p2p_msg(int idx, USER * user_list, char *buf)
 	// find the user id using find_user_index()
 	// if user not found, write back to the original user "User not found", using the write()function on pipes.
 	// if the user is found then write the message that the user wants to send to that user.
+
+  //
+
 }
 
 //takes in the filename of the file being executed, and prints an error message stating the commands and their usage
@@ -450,7 +454,9 @@ int main(int argc, char * argv[])
     else if (status != 0)
     {
       // Message received from STDIN.
-      int command = get_command_type(stdinBuffer);
+      int command = get_command_type(strtok(stdinBuffer, "\n")); //removes \n
+
+      printf("HERE IS COMMAND: %d", command);
       if (command == LIST)
       {
         list_users(-1, user_list);

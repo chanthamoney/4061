@@ -87,6 +87,7 @@ void main(int argc, char * argv[]) {
 				printf("%s", childServerBuffer);
 				print_prompt(argv[1]); // Prints user prompt to screen again.
 			}
+			else if(childServerBuffer == EOF)
 			else
 			{
 				// ERROR occured.
