@@ -116,8 +116,11 @@ void cleanup_user(int idx, USER * user_list)
 	// m_user_id should be set to zero, using memset()
 	memset(user_list[idx].m_user_id, 0, sizeof(user_list[idx].m_user_id));
 	// close all the fd
-	close(user_list[idx].m_fd_to_user);
-	close(user_list[idx].m_fd_to_server);
+	int close1 = close(user_list[idx].m_fd_to_user);
+	int close2 = close(user_list[idx].m_fd_to_server);
+  if(close1 < 0 || close2 < 0) {
+    perror("Fail to close on cleanup_user ");
+  }
 	// set the value of all fd back to -1
 	user_list[idx].m_fd_to_user = -1;
 	user_list[idx].m_fd_to_server = -1;
@@ -408,11 +411,17 @@ int main(int argc, char * argv[])
 				else if (pid == 0)
 				{
 					// Close unused pipes in CHILD-TO-USER.
-					close(pipe_child_reading_from_user[1]);
-					close(pipe_child_writing_to_user[0]);
+					int pipeChildClose1 = close(pipe_child_reading_from_user[1]);
+					int pipeChildClose2 = close(pipe_child_writing_to_user[0]);
+          if( pipeChildClose1 < 0 || pipeChildClose2 < 0) {
+            perror("Fail to close unused pipes in CHILD-TO-USER in Child process");
+          }
 					// Close unused pipes in CHILD-TO-SERVER.
-					close(pipe_SERVER_reading_from_child[0]);
-					close(pipe_SERVER_writing_to_child[1]);
+					int pipeServerClose1 = close(pipe_SERVER_reading_from_child[0]);
+					int pipeServerClose2 = close(pipe_SERVER_writing_to_child[1]);
+          if( pipeServerClose1 < 0 || pipeServerClose2 < 0 ) {
+            perror("Fail to close unused pipes in CHILD-TO-SERVER in Child process");
+          }
 
 					// Child process: poll users and SERVER
 					while (1)
@@ -475,13 +484,19 @@ int main(int argc, char * argv[])
 					// Server process: Add a new user information into an empty slot
 					add_user(idx, user_list, pid, user_id, pipe_SERVER_writing_to_child[1], pipe_SERVER_reading_from_child[0]);
 					// Close unused pipes in CHILD-TO-USER.
-					close(pipe_child_reading_from_user[0]);
-					close(pipe_child_reading_from_user[1]);
-					close(pipe_child_writing_to_user[0]);
-					close(pipe_child_writing_to_user[1]);
+					int childReadClose1 = close(pipe_child_reading_from_user[0]);
+					int childReadClose2 = close(pipe_child_reading_from_user[1]);
+					int childWriteClose1 = close(pipe_child_writing_to_user[0]);
+					int childWriteClose2 = close(pipe_child_writing_to_user[1]);
+          if(childReadClose1 < 0 || childReadClose2 < 0 || childWriteClose1 < 0 || childWriteClose2 < 0) {
+            perror("Fail to close unused pipes in CHILD-TO-USER in Parent/SERVER process");
+          }
 					// Close unused pipes in CHILD-TO-SERVER.
-					close(pipe_SERVER_reading_from_child[1]);
-					close(pipe_SERVER_writing_to_child[0]);
+					int serverClose1 = close(pipe_SERVER_reading_from_child[1]);
+					int serverClose2 = close(pipe_SERVER_writing_to_child[0]);
+          if( serverClose1 < 0 || serverClose2 < 0 ) {
+            perror("Fail to close unused pipes in CHILD-TO-SERVER in Parent/SERVER process.");
+          }
 				}
 				// ---------------------------------------------------------------------------- //
 			}
@@ -493,10 +508,13 @@ int main(int argc, char * argv[])
           write(pipe_child_writing_to_user[1], "Server is full", MAX_MSG);
           // Close pipes.
           // Closing these pipes will trigger the EOF in the USER when reading.
-          close(pipe_child_reading_from_user[0]);
-					close(pipe_child_reading_from_user[1]);
-					close(pipe_child_writing_to_user[0]);
-					close(pipe_child_writing_to_user[1]);
+          int close1 = close(pipe_child_reading_from_user[0]);
+					int close2 = close(pipe_child_reading_from_user[1]);
+					int close3 = close(pipe_child_writing_to_user[0]);
+					int close4 = close(pipe_child_writing_to_user[1]);
+          if (close1 < 0 || close2 < 0 || close3 < 0 || close4 < 0 ) {
+            perror("Fail to close pipes when server cannot accept anymore user.");
+          }
         }
         else
         {
@@ -505,10 +523,13 @@ int main(int argc, char * argv[])
           write(pipe_child_writing_to_user[1], "User name already exists", MAX_MSG);
           // Close pipes.
           // Closing these pipes will trigger the EOF in the USER when reading.
-          close(pipe_child_reading_from_user[0]);
-					close(pipe_child_reading_from_user[1]);
-					close(pipe_child_writing_to_user[0]);
-					close(pipe_child_writing_to_user[1]);
+          int close1 = close(pipe_child_reading_from_user[0]);
+					int close2 = close(pipe_child_reading_from_user[1]);
+					int close3 = close(pipe_child_writing_to_user[0]);
+					int close4 = close(pipe_child_writing_to_user[1]);
+          if (close1 < 0 || close2 < 0 || close3 < 0 || close4 < 0 ) {
+            perror("Fail to close pipes when there already exists a user with the same name.");
+          }
         }
       }
 		}
