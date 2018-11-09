@@ -37,8 +37,11 @@ void main(int argc, char * argv[]) {
 	fcntl(pipe_user_writing_to_server[1], F_SETFL, fcntl(pipe_user_writing_to_server[1], F_GETFL)| O_NONBLOCK);
 	fcntl(0, F_SETFL, fcntl(0, F_GETFL)| O_NONBLOCK);
 
-	close(pipe_user_reading_from_server[1]);
-	close(pipe_user_writing_to_server[0]);
+	int close1 = close(pipe_user_reading_from_server[1]);
+	int close2 = close(pipe_user_writing_to_server[0]);
+	if (close1 < 0 || close2 < 0) {
+		perror("Fail to close unused user pipes for client");
+	}
 
 	print_prompt(argv[1]);
 	char buf[MAX_MSG];
