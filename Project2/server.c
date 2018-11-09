@@ -64,7 +64,7 @@ int list_users(int idx, USER * user_list)
 	} else {
 		/* write to the given pipe fd */
 		if (write(user_list[idx].m_fd_to_user, buf, strlen(buf) + 1) < 0)
-			perror("writing to server shell");
+			perror("Fail to writing to server shell");
 	}
 
 	return 0;
@@ -275,7 +275,10 @@ void send_p2p_msg(int idx, USER * user_list, char *buf)
 	// if user not found, write back to the original user "User not found", using the write()function on pipes.
 	if (jdx == -1)
 	{
-		write(user_list[idx].m_fd_to_user, "User not found", MAX_MSG);
+		int write1 = write(user_list[idx].m_fd_to_user, "User not found", MAX_MSG);
+    if(write1 < 0) {
+      perror("Fail to write back to the original user 'User not found'in send_p2p_msg ");
+    }
 	}
 	// if the user is found then write the message that the user wants to send to that user.
 	else
@@ -286,7 +289,10 @@ void send_p2p_msg(int idx, USER * user_list, char *buf)
     strcpy(message, user_list[idx].m_user_id);
     strcat(message, ": ");
 		strcat(message, text);
-		write(user_list[jdx].m_fd_to_user, message, MAX_MSG);
+		int write2 = write(user_list[jdx].m_fd_to_user, message, MAX_MSG);
+    if (write2 < 0){
+      perror("Fail to write the message from user to other user in send_p2p_msg");
+    }
 	}
 }
 
@@ -505,7 +511,10 @@ int main(int argc, char * argv[])
         if (idx == -1)
         {
           // Send message to USER that SEVER canot accept any more users.
-          write(pipe_child_writing_to_user[1], "Server is full", MAX_MSG);
+          int write1 = write(pipe_child_writing_to_user[1], "Server is full", MAX_MSG);
+          if( write1 < 0 ){
+            perror("Fail to write to send message to USER that SEVER canot accept any more users.");
+          }
           // Close pipes.
           // Closing these pipes will trigger the EOF in the USER when reading.
           int close1 = close(pipe_child_reading_from_user[0]);
@@ -520,7 +529,10 @@ int main(int argc, char * argv[])
         {
           // Send message to USER that there already exists a user with the same name.
           // Send message to USER that SEVER canot accept any more users.
-          write(pipe_child_writing_to_user[1], "User name already exists", MAX_MSG);
+          int write2 = write(pipe_child_writing_to_user[1], "User name already exists", MAX_MSG);
+          if(write2 < 0){
+            perror("Fail to write to send message to USER that SEVER canot accept any more users.");
+          }
           // Close pipes.
           // Closing these pipes will trigger the EOF in the USER when reading.
           int close1 = close(pipe_child_reading_from_user[0]);
