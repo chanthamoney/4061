@@ -687,18 +687,15 @@ int main(int argc, char * argv[])
 						case LIST:
 							// Server requests listing of all users.
 							list_users(i, user_list);
-              print_prompt("admin");
 							break;
 						case P2P:
 							// Communicate with another user that the receiving user requested for.
 							// Extract name.
 							send_p2p_msg(i, user_list, buf);
-              print_prompt("admin");
 							break;
 						case EXIT:
 							// Kick the user, because they want to exit.
 							kick_user(i, user_list);
-              print_prompt("admin");
 							break;
 						default:
               // FORMATTING TO LOOK NICE.
@@ -718,11 +715,10 @@ int main(int argc, char * argv[])
               // END OF FORMATTING.
 
 							printf("%s: %s\n", user_list[i].m_user_id, buf); // Print message.
-							print_prompt("admin"); // Prints admin prompt to screen again.
-
-							broadcast_msg(user_list, buf, user_list[i].m_user_id);
+							broadcast_msg(user_list, buf, user_list[i].m_user_id); // Broadcast message to all other users
 							break;
 					}
+          print_prompt("admin"); // Prints admin prompt to screen again.
 				}
 				else
 				{
