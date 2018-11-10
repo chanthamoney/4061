@@ -698,6 +698,7 @@ int main(int argc, char * argv[])
 						case EXIT:
 							// Kick the user, because they want to exit.
 							kick_user(i, user_list);
+              print_prompt("admin");
 							break;
 						default:
               // FORMATTING TO LOOK NICE.
