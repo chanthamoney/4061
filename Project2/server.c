@@ -64,7 +64,50 @@ int list_users(int idx, USER * user_list)
 	} else {
 		/* write to the given pipe fd */
 		if (write(user_list[idx].m_fd_to_user, buf, strlen(buf) + 1) < 0)
-			perror("writing to server shell");
+			perror("Fail to writing to server shell");
+	}
+
+	return 0;
+}
+
+/*
+ * broadcast message to all users
+ */
+int broadcast_msg(USER * user_list, char *buf, char *sender)
+{
+	//iterate over the user_list and if a slot is full, and the user is not the sender itself,
+	//then send the message to that user
+	//return zero on success
+	char message[MAX_MSG];
+	memset(message, 0, sizeof(message));
+	if ((strcmp(sender, "")) == 0)
+	{
+    // SERVER is broadcasting message to all users.
+    strcpy(message, "ADMIN-NOTICE: ");
+		strcat(message, buf);
+	}
+  else if ((strcmp(sender, "\n")) == 0)
+  {
+    // SERVER system notices (NOT SERVER BROADCASTING).
+    strcpy(message, buf);
+  }
+	else
+	{
+    // Default: USER is sending message to all other users.
+    strcpy(message, sender);
+		strcat(message, ": ");
+		strcat(message, buf);
+	}
+
+	for (int i = 0; i<MAX_USER; i++)
+	{
+		if (user_list[i].m_status != SLOT_EMPTY && user_list[i].m_user_id != sender)
+		{
+			if (write(user_list[i].m_fd_to_user, message, MAX_MSG) < 0)
+			{
+				return -1;
+			}
+		}
 	}
 
 	return 0;
@@ -116,8 +159,11 @@ void cleanup_user(int idx, USER * user_list)
 	// m_user_id should be set to zero, using memset()
 	memset(user_list[idx].m_user_id, 0, sizeof(user_list[idx].m_user_id));
 	// close all the fd
-	close(user_list[idx].m_fd_to_user);
-	close(user_list[idx].m_fd_to_server);
+	int close1 = close(user_list[idx].m_fd_to_user);
+	int close2 = close(user_list[idx].m_fd_to_server);
+  if(close1 < 0 || close2 < 0) {
+    perror("Fail to close on cleanup_user ");
+  }
 	// set the value of all fd back to -1
 	user_list[idx].m_fd_to_user = -1;
 	user_list[idx].m_fd_to_server = -1;
@@ -135,47 +181,37 @@ void kick_user(int idx, USER * user_list) {
   }
   else
   {
+    // Notify the SERVER and all users of the user that has been kicked/exited.
+    // Create buffer to send.
+    char kickMSG[MAX_MSG];
+    strcpy(kickMSG, user_list[idx].m_user_id);
+    strcat(kickMSG, " has left the server");
+
+    // Print and broastcast message.
+    // FORMATTING TO LOOK NICE.
+    // BEWARE YOUR EYES. THIS IS BRUTE FORCE CODING.
+    for (int i = 0; i < 10; i++)
+    {
+      printf("\b");
+    }
+    for (int i = 0; i < 10; i++)
+    {
+      printf(" ");
+    }
+    for (int i = 0; i < 10; i++)
+    {
+      printf("\b");
+    }
+    // END OF FORMATTING.
+
+    printf("%s\n", kickMSG);
+    broadcast_msg(user_list, kickMSG, "\n");
+
     // should kill_user()
     kill_user(idx, user_list);
     // then perform cleanup_user()
     cleanup_user(idx, user_list);
   }
-}
-
-/*
- * broadcast message to all users
- */
-int broadcast_msg(USER * user_list, char *buf, char *sender)
-{
-	//iterate over the user_list and if a slot is full, and the user is not the sender itself,
-	//then send the message to that user
-	//return zero on success
-	char message[MAX_MSG];
-	memset(message, 0, sizeof(message));
-	if ((strcmp(sender, ""))!=0)
-	{
-		strcpy(message, sender);
-		strcat(message, ": ");
-		strcat(message, buf);
-	}
-	else
-	{
-		strcpy(message, "ADMIN-NOTICE: ");
-		strcat(message, buf);
-	}
-
-	for (int i = 0; i<MAX_USER; i++)
-	{
-		if (user_list[i].m_status != SLOT_EMPTY && user_list[i].m_user_id != sender)
-		{
-			if (write(user_list[i].m_fd_to_user, message, MAX_MSG) < 0)
-			{
-				return -1;
-			}
-		}
-	}
-
-	return 0;
 }
 
 /*
@@ -272,7 +308,10 @@ void send_p2p_msg(int idx, USER * user_list, char *buf)
 	// if user not found, write back to the original user "User not found", using the write()function on pipes.
 	if (jdx == -1)
 	{
-		write(user_list[idx].m_fd_to_user, "User not found", MAX_MSG);
+		int write1 = write(user_list[idx].m_fd_to_user, "User not found", MAX_MSG);
+    if(write1 < 0) {
+      perror("Fail to write back to the original user 'User not found'in send_p2p_msg");
+    }
 	}
 	// if the user is found then write the message that the user wants to send to that user.
 	else
@@ -283,7 +322,30 @@ void send_p2p_msg(int idx, USER * user_list, char *buf)
     strcpy(message, user_list[idx].m_user_id);
     strcat(message, ": ");
 		strcat(message, text);
-		write(user_list[jdx].m_fd_to_user, message, MAX_MSG);
+		int write2 = write(user_list[jdx].m_fd_to_user, message, MAX_MSG);
+    if (write2 < 0){
+      perror("Fail to write the message from user to other user in send_p2p_msg");
+    }
+
+    // Now print to SERVER.
+
+    // FORMATTING TO LOOK NICE.
+    // BEWARE YOUR EYES. THIS IS BRUTE FORCE CODING.
+    for (int i = 0; i < 10; i++)
+    {
+      printf("\b");
+    }
+    for (int i = 0; i < 10; i++)
+    {
+      printf(" ");
+    }
+    for (int i = 0; i < 10; i++)
+    {
+      printf("\b");
+    }
+    // END OF FORMATTING.
+
+    printf("%s whispered to %s: %s\n", user_list[idx].m_user_id, user_list[jdx].m_user_id, text); // Print message.
 	}
 }
 
@@ -338,6 +400,7 @@ int main(int argc, char * argv[])
 	init_user_list(user_list);   // Initialize user list
 
 	char buf[MAX_MSG];
+  char buf_err[MAX_MSG]; // copy of buf for error checking.
 	fcntl(0, F_SETFL, fcntl(0, F_GETFL)| O_NONBLOCK);
 	print_prompt("admin");
 
@@ -408,11 +471,17 @@ int main(int argc, char * argv[])
 				else if (pid == 0)
 				{
 					// Close unused pipes in CHILD-TO-USER.
-					close(pipe_child_reading_from_user[1]);
-					close(pipe_child_writing_to_user[0]);
+					int pipeChildClose1 = close(pipe_child_reading_from_user[1]);
+					int pipeChildClose2 = close(pipe_child_writing_to_user[0]);
+          if( pipeChildClose1 < 0 || pipeChildClose2 < 0) {
+            perror("Fail to close unused pipes in CHILD-TO-USER in Child process");
+          }
 					// Close unused pipes in CHILD-TO-SERVER.
-					close(pipe_SERVER_reading_from_child[0]);
-					close(pipe_SERVER_writing_to_child[1]);
+					int pipeServerClose1 = close(pipe_SERVER_reading_from_child[0]);
+					int pipeServerClose2 = close(pipe_SERVER_writing_to_child[1]);
+          if( pipeServerClose1 < 0 || pipeServerClose2 < 0 ) {
+            perror("Fail to close unused pipes in CHILD-TO-SERVER in Child process");
+          }
 
 					// Child process: poll users and SERVER
 					while (1)
@@ -424,7 +493,7 @@ int main(int argc, char * argv[])
 						{
 							// No message to be read from SERVER. Pass.
 						}
-						else if (serverStatus != -1)
+						else if (serverStatus != 0)
 						{
 							// Message read from SERVER.
 							if (write(pipe_child_writing_to_user[1], buf, MAX_MSG) < 0)
@@ -447,7 +516,7 @@ int main(int argc, char * argv[])
 						{
 						  // No message to be read from USER. Pass.
 						}
-						else if (userStatus != -1)
+						else if (userStatus != 0)
 						{
 							// Message read from USER.
 							// Forward to SERVER for procressing.
@@ -475,13 +544,19 @@ int main(int argc, char * argv[])
 					// Server process: Add a new user information into an empty slot
 					add_user(idx, user_list, pid, user_id, pipe_SERVER_writing_to_child[1], pipe_SERVER_reading_from_child[0]);
 					// Close unused pipes in CHILD-TO-USER.
-					close(pipe_child_reading_from_user[0]);
-					close(pipe_child_reading_from_user[1]);
-					close(pipe_child_writing_to_user[0]);
-					close(pipe_child_writing_to_user[1]);
+					int childReadClose1 = close(pipe_child_reading_from_user[0]);
+					int childReadClose2 = close(pipe_child_reading_from_user[1]);
+					int childWriteClose1 = close(pipe_child_writing_to_user[0]);
+					int childWriteClose2 = close(pipe_child_writing_to_user[1]);
+          if(childReadClose1 < 0 || childReadClose2 < 0 || childWriteClose1 < 0 || childWriteClose2 < 0) {
+            perror("Fail to close unused pipes in CHILD-TO-USER in Parent/SERVER process");
+          }
 					// Close unused pipes in CHILD-TO-SERVER.
-					close(pipe_SERVER_reading_from_child[1]);
-					close(pipe_SERVER_writing_to_child[0]);
+					int serverClose1 = close(pipe_SERVER_reading_from_child[1]);
+					int serverClose2 = close(pipe_SERVER_writing_to_child[0]);
+          if( serverClose1 < 0 || serverClose2 < 0 ) {
+            perror("Fail to close unused pipes in CHILD-TO-SERVER in Parent/SERVER process.");
+          }
 				}
 				// ---------------------------------------------------------------------------- //
 			}
@@ -490,25 +565,37 @@ int main(int argc, char * argv[])
         if (idx == -1)
         {
           // Send message to USER that SEVER canot accept any more users.
-          write(pipe_child_writing_to_user[1], "Server is full", MAX_MSG);
+          int write1 = write(pipe_child_writing_to_user[1], "Server is full", MAX_MSG);
+          if( write1 < 0 ){
+            perror("Fail to write to send message to USER that SEVER canot accept any more users.");
+          }
           // Close pipes.
           // Closing these pipes will trigger the EOF in the USER when reading.
-          close(pipe_child_reading_from_user[0]);
-					close(pipe_child_reading_from_user[1]);
-					close(pipe_child_writing_to_user[0]);
-					close(pipe_child_writing_to_user[1]);
+          int close1 = close(pipe_child_reading_from_user[0]);
+					int close2 = close(pipe_child_reading_from_user[1]);
+					int close3 = close(pipe_child_writing_to_user[0]);
+					int close4 = close(pipe_child_writing_to_user[1]);
+          if (close1 < 0 || close2 < 0 || close3 < 0 || close4 < 0 ) {
+            perror("Fail to close pipes when server cannot accept anymore user.");
+          }
         }
         else
         {
           // Send message to USER that there already exists a user with the same name.
           // Send message to USER that SEVER canot accept any more users.
-          write(pipe_child_writing_to_user[1], "User name already exists", MAX_MSG);
+          int write2 = write(pipe_child_writing_to_user[1], "User name already exists", MAX_MSG);
+          if(write2 < 0){
+            perror("Fail to write to send message to USER that SEVER canot accept any more users.");
+          }
           // Close pipes.
           // Closing these pipes will trigger the EOF in the USER when reading.
-          close(pipe_child_reading_from_user[0]);
-					close(pipe_child_reading_from_user[1]);
-					close(pipe_child_writing_to_user[0]);
-					close(pipe_child_writing_to_user[1]);
+          int close1 = close(pipe_child_reading_from_user[0]);
+					int close2 = close(pipe_child_reading_from_user[1]);
+					int close3 = close(pipe_child_writing_to_user[0]);
+					int close4 = close(pipe_child_writing_to_user[1]);
+          if (close1 < 0 || close2 < 0 || close3 < 0 || close4 < 0 ) {
+            perror("Fail to close pipes when there already exists a user with the same name.");
+          }
         }
       }
 		}
@@ -520,41 +607,50 @@ int main(int argc, char * argv[])
 
 		// Poll stdin (input from the terminal) and handle admnistrative command
 		memset(buf, 0, sizeof(buf));
+    memset(buf_err, 0, sizeof(buf_err));
 		int status = read(0, buf, MAX_MSG);
+    strcpy(buf_err, buf);
 		if ( (status < 0) && (errno == EAGAIN) )
 		{
 			// No message to be read from STDIN. Pass.
 		}
 		else if (status != 0)
 		{
-      char user_name[MAX_USER_ID];
-			// Message received from STDIN.
-			switch(get_command_type(strtok(buf, "\n")))
-			{
-				case LIST:
-					// Server requests listing of all users.
-					list_users(-1, user_list);
-					break;
-				case KICK:
-					// Kick user.
-					extract_name(strtok(buf, "\n"), user_name);
-					kick_user(find_user_index(user_list, user_name), user_list);
-					break;
-				case EXIT:
-					// Kick all users and terminate the server.
-					for (int i = 0; i < MAX_USER; i++)
-					{
-            if (user_list[i].m_status == SLOT_FULL)
-            {
-              kick_user(i, user_list);
-            }
-					}
-					// Kill self.
-					return 0;
-				default:
-					// Send a notice to all users.
-					broadcast_msg(user_list, strtok(buf, "\n"), "");
-					break;
+      if (strcmp(strtok(buf_err, " "), "\n") == 0)
+      {
+        // SERVER sent an 'empty' message.
+      }
+      else
+      {
+        char user_name[MAX_USER_ID];
+  			// Message received from STDIN.
+  			switch(get_command_type(strtok(buf, "\n")))
+        {
+  				case LIST:
+  					// Server requests listing of all users.
+  					list_users(-1, user_list);
+  					break;
+  				case KICK:
+  					// Kick user.
+  					extract_name(strtok(buf, "\n"), user_name);
+  					kick_user(find_user_index(user_list, user_name), user_list);
+  					break;
+  				case EXIT:
+  					// Kick all users and terminate the server.
+  					for (int i = 0; i < MAX_USER; i++)
+  					{
+              if (user_list[i].m_status == SLOT_FULL)
+              {
+                kick_user(i, user_list);
+              }
+  					}
+  					// Kill self.
+  					return 0;
+  				default:
+  					// Send a notice to all users.
+  					broadcast_msg(user_list, strtok(buf, "\n"), "");
+  					break;
+          }
 			}
 			print_prompt("admin"); // Prints admin prompt to screen again.
 		}
@@ -591,11 +687,13 @@ int main(int argc, char * argv[])
 						case LIST:
 							// Server requests listing of all users.
 							list_users(i, user_list);
+              print_prompt("admin");
 							break;
 						case P2P:
 							// Communicate with another user that the receiving user requested for.
 							// Extract name.
 							send_p2p_msg(i, user_list, buf);
+              print_prompt("admin");
 							break;
 						case EXIT:
 							// Kick the user, because they want to exit.

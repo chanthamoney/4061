@@ -37,11 +37,15 @@ void main(int argc, char * argv[]) {
 	fcntl(pipe_user_writing_to_server[1], F_SETFL, fcntl(pipe_user_writing_to_server[1], F_GETFL)| O_NONBLOCK);
 	fcntl(0, F_SETFL, fcntl(0, F_GETFL)| O_NONBLOCK);
 
-	close(pipe_user_reading_from_server[1]);
-	close(pipe_user_writing_to_server[0]);
+	int close1 = close(pipe_user_reading_from_server[1]);
+	int close2 = close(pipe_user_writing_to_server[0]);
+	if (close1 < 0 || close2 < 0) {
+		perror("Fail to close unused user pipes for client");
+	}
 
 	print_prompt(argv[1]);
 	char buf[MAX_MSG];
+	char buf_err[MAX_MSG]; // copy of buf for error checking.
 
 	/* -------------- YOUR CODE STARTS HERE -----------------------------------*/
 
@@ -52,8 +56,10 @@ void main(int argc, char * argv[]) {
 		// -------------------------------------------------------------------- //
 
 		// Poll stdin (input from the terminal) and send it to server (child process) via pipe
-		memset(buf, 0, sizeof(buf));
+			memset(buf, 0, sizeof(buf));
+			memset(buf_err, 0, sizeof(buf_err));
 	    int stdinStatus = read(0, buf, MAX_MSG);
+			strcpy(buf_err, buf);
 	    	//printf("status of STDIN: %d\n", status);
 	    if ( (stdinStatus < 0) && (errno == EAGAIN) )
 	    {
@@ -62,7 +68,11 @@ void main(int argc, char * argv[]) {
 	    else if (stdinStatus != 0)
 	    {
 				// Message received from STDIN.
-				if (write(pipe_user_writing_to_server[1], strtok(buf, "\n"), MAX_MSG) < 0)
+				if (strcmp(strtok(buf_err, " "), "\n") == 0)
+				{
+					// USER sent an 'empty' message.
+				}
+				else if (write(pipe_user_writing_to_server[1], strtok(buf, "\n"), MAX_MSG) < 0)
 				{
 					printf("ERROR: Failed to write to CHILD process of SERVER.\n");
 					exit(-1);
