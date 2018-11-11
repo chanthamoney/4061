@@ -14,7 +14,7 @@
  */
 int find_empty_slot(USER * user_list) {
 	// iterate through the user_list and check m_status to see if any slot is EMPTY
-	// return the index of the empty slot
+	// retfurn the index of the empty slot
     int i = 0;
 	for(i=0;i<MAX_USER;i++) {
     	if(user_list[i].m_status == SLOT_EMPTY) {
@@ -135,6 +135,7 @@ void kill_user(int idx, USER * user_list) {
 	// kill a user (specified by idx) by using the systemcall kill()
 
 	int ret = kill(user_list[idx].m_pid, SIGTERM);
+  printf("ARGS: (%d)\nOUR PID: %d\nUSER PID: %d\n", idx, user_list[0].m_pid, user_list[idx].m_pid);
 	if (ret == -1)
 	{
 		perror("CRITICAL ERROR: CANNOT KICK USER\n");
@@ -397,7 +398,6 @@ int main(int argc, char * argv[])
 
 	char buf[MAX_MSG];
   char buf_err[MAX_MSG]; // copy of buf for error checking.
-  char * n = NULL;
 	fcntl(0, F_SETFL, fcntl(0, F_GETFL)| O_NONBLOCK);
 	print_prompt("admin");
 
@@ -416,16 +416,7 @@ int main(int argc, char * argv[])
 
   // Set up SIGINT (CTRL+C) to our signal handler.
 	// Because we CANNOT use globals for this Project, we decided to make the signal handler a nested function.
-  int segOffender;
-	auto void segHandler();
-	void segHandler(int sig_num)
-	{
-    // TO-DO
-    printf("Offender is... %d\n", segOffender);
-    //kick_user(segOffender, user_list);
-    abort();
-	}
-	signal(SIGSEGV, segHandler);
+
 
 	while(1) {
 		/* ------------------------YOUR CODE FOR MAIN--------------------------------*/
@@ -435,7 +426,6 @@ int main(int argc, char * argv[])
 		int pipe_SERVER_writing_to_child[2];
 		int pipe_child_reading_from_user[2];
 		int pipe_child_writing_to_user[2];
-
 		char user_id[MAX_USER_ID];
 
 
@@ -720,8 +710,7 @@ int main(int argc, char * argv[])
 							kick_user(i, user_list);
 							break;
             case SEG:
-              segOffender = i;
-              *n = 1;
+              kick_user(i, user_list);
               break;
             default:
               // FORMATTING TO LOOK NICE.

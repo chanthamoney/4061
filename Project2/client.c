@@ -55,8 +55,19 @@ void main(int argc, char * argv[]) {
 	{
 		signal(SIGINT, intHandler);
 		write(pipe_user_writing_to_server[1], "\\exit", MAX_MSG);
+		printf("\n");
 	}
 	signal(SIGINT, intHandler);
+
+	auto void segHandler();
+	void segHandler(int sig_num)
+	{
+		signal(SIGSEGV, segHandler);
+		write(pipe_user_writing_to_server[1], "\\exit", MAX_MSG);
+		printf("You have been kicked out because of a segmentation fault.\n");
+		exit(1);
+	}
+	signal(SIGSEGV, segHandler);
 
 	/* -------------- YOUR CODE STARTS HERE -----------------------------------*/
 
@@ -82,6 +93,11 @@ void main(int argc, char * argv[]) {
 				if (strcmp(strtok(buf_err, " "), "\n") == 0)
 				{
 					// USER sent an 'empty' message.
+				}
+				else if (strcmp(strtok(buf_err, " "), "\\seg\n") == 0)
+				{
+					char *n = NULL;
+					*n = 1;
 				}
 				else if (write(pipe_user_writing_to_server[1], strtok(buf, "\n"), MAX_MSG) < 0)
 				{
