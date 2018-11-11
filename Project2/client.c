@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include "comm.h"
 #include "util.h"
+#include <signal.h>
 
 /* -------------------------Main function for the client ----------------------*/
 void main(int argc, char * argv[]) {
@@ -46,6 +47,16 @@ void main(int argc, char * argv[]) {
 	print_prompt(argv[1]);
 	char buf[MAX_MSG];
 	char buf_err[MAX_MSG]; // copy of buf for error checking.
+
+	// Set up SIGINT (CTRL+C) to our signal handler.
+	// Because we CANNOT use globals for this Project, we decided to make the signal handler a nested function.
+	auto void intHandler();
+	void intHandler(int sig_num)
+	{
+		signal(SIGINT, intHandler);
+		write(pipe_user_writing_to_server[1], "\\exit", MAX_MSG);
+	}
+	signal(SIGINT, intHandler);
 
 	/* -------------- YOUR CODE STARTS HERE -----------------------------------*/
 
@@ -102,10 +113,13 @@ void main(int argc, char * argv[]) {
 		else if (childServerStatus == 0)
 		{
 			// Pipe closed! Terminate USER!
+
+			// FORMATTING BELOW TO LOOK NICE
 			for (int i = 0; i < strlen(argv[1])+5; i++)
 			{
 				printf("\b"); // Removes and replaces the user prompt with message from server.
 			}
+
 			exit(0);
 		}
 		else if (childServerStatus != 0)

@@ -86,11 +86,6 @@ int broadcast_msg(USER * user_list, char *buf, char *sender)
     strcpy(message, "ADMIN-NOTICE: ");
 		strcat(message, buf);
 	}
-  else if ((strcmp(sender, "\n")) == 0)
-  {
-    // SERVER system notices (NOT SERVER BROADCASTING).
-    strcpy(message, buf);
-  }
 	else
 	{
     // Default: USER is sending message to all other users.
@@ -205,7 +200,7 @@ void kick_user(int idx, USER * user_list) {
     // END OF FORMATTING.
 
     printf("%s\n", kickMSG);
-    broadcast_msg(user_list, kickMSG, "\n");
+    broadcast_msg(user_list, kickMSG, "");
 
     // should kill_user()
     kill_user(idx, user_list);
@@ -385,6 +380,7 @@ void cleanup_error(USER * user_list) {
   }
 }
 
+
 /* ---------------------End of the functions that implementServer functionality -----------------*/
 
 
@@ -401,10 +397,36 @@ int main(int argc, char * argv[])
 
 	char buf[MAX_MSG];
   char buf_err[MAX_MSG]; // copy of buf for error checking.
+  char * n = NULL;
 	fcntl(0, F_SETFL, fcntl(0, F_GETFL)| O_NONBLOCK);
 	print_prompt("admin");
 
-	//
+  // Set up SIGINT (CTRL+C) to our signal handler.
+	// Because we CANNOT use globals for this Project, we decided to make the signal handler a nested function.
+	auto void intHandler();
+	void intHandler(int sig_num)
+	{
+    cleanup_error(user_list);
+    int status;
+    int pid = getpid();
+  	waitpid(pid, &status, WNOHANG);
+    exit(0);
+	}
+	signal(SIGINT, intHandler);
+
+  // Set up SIGINT (CTRL+C) to our signal handler.
+	// Because we CANNOT use globals for this Project, we decided to make the signal handler a nested function.
+  int segOffender;
+	auto void segHandler();
+	void segHandler(int sig_num)
+	{
+    // TO-DO
+    printf("Offender is... %d\n", segOffender);
+    //kick_user(segOffender, user_list);
+    abort();
+	}
+	signal(SIGSEGV, segHandler);
+
 	while(1) {
 		/* ------------------------YOUR CODE FOR MAIN--------------------------------*/
 
@@ -697,7 +719,11 @@ int main(int argc, char * argv[])
 							// Kick the user, because they want to exit.
 							kick_user(i, user_list);
 							break;
-						default:
+            case SEG:
+              segOffender = i;
+              *n = 1;
+              break;
+            default:
               // FORMATTING TO LOOK NICE.
               // BEWARE YOUR EYES. THIS IS BRUTE FORCE CODING.
         			for (int i = 0; i < 10; i++)
