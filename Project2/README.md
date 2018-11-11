@@ -7,7 +7,6 @@
 TODO: WE ASSUMED EMPTY MESSAGES CAN BE SENT
 # Project 2: Multi-Process Chat App's Purpose
 
-One Paragraph of project description goes here
 The purpose of this program is to develop a multi process chat app. There is a server
 that can host up to 10 users/clients. The server and client can communicate together through
 pipes. The server can use \list to list all of the users/clients, \kick <username> to terminate that specific
@@ -48,6 +47,7 @@ The client has 4 options.
   3. \p2p <username><message>, which will send a personal message (<message>) to the user specified. However,
   it will print error if the user is invalid.
   4. <any-other-text>: Will broadcast this text to all user processes with the prefix of its username.
+  5. \seg Will create segmantation fault in the user. However, this will not affect the server and other users as the server will kick the user out. 
 
 ## What exactly our program does
 

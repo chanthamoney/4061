@@ -1,3 +1,10 @@
+/*＊ CSci4061 F2018 Assignment 2
+＊ login: chant077
+＊ date: 11/10/2018
+＊ name: Cassandra Chanthamontry, Ounngy Ing, Jogey Vang
+＊ id: chant077 (5216058), ingxx006 (5330616), vang2351 (5312382)
+*/
+
 #include <stdio.h>
 #include <fcntl.h>
 #include <errno.h>
