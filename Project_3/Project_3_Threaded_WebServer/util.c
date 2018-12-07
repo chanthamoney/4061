@@ -216,6 +216,7 @@ int get_request(int fd, char *filename) {
 
    strncpy(filename,strings[1],1024);
    filename[1023] = '\0'; // just in case
+   freemakeargv(strings);
 
    return 0;
 
