@@ -18,6 +18,10 @@
 #define INVALID -1
 #define BUFF_SIZE 1024
 
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+//pthread_mutex_t worker_mutex;
+//pthread_cond_t  count_condv;
+
 /*
   THE CODE STRUCTURE GIVEN BELOW IS JUST A SUGESSTION. FEEL FREE TO MODIFY AS NEEDED
 */
@@ -171,11 +175,11 @@ void * dispatch(void *arg) {
     int fd = accept_connection();
     if(fd>0){
 
-    // Get request from the client
-    request_queue* temp = (request_queue*)arg;
-    get_request(temp->fd, (char*)temp->request);
-    // Add the request into the queue
-    enqueue(arg);
+      // Get request from the client
+      request_queue* temp = (request_queue*)arg;
+      get_request(temp->fd, (char*)temp->request);
+      // Add the request into the queue
+      enqueue(arg);
     }
 
    }
@@ -192,6 +196,7 @@ void * worker(void *arg) {
     // Start recording time
 
     // Get the request from the queue
+    dequeue(arg);
 
     // Get the data from the disk or the cache
 
@@ -215,14 +220,45 @@ int main(int argc, char **argv) {
   }
 
   // Get the input args
+  int port = atoi(argv[1]);
+  char* path = argv[2];
+  int num_dispatcher = atoi(argv[3]);
+  int num_workers = atoi(argv[4]);
+  int dynamic_flag = atoi(argv[5]);
+  int qlen = atoi(argv[6]);
+  int cache_entry = atoi(argv[7]);
+
 
   // Perform error checks on the input arguments
+  init(port);
+  pthread_t dispatch_threads_pools[num_dispatcher];
+  pthread_t worker_threads_pools[num_workers];
 
   // Change the current working directory to server root directory
 
   // Start the server and initialize cache
 
   // Create dispatcher and worker threads
+  int dis_num = num_dispatcher;
+  int work_num = num_workers;
+  pthread_t dispatch_threads, worker_threads;
+  while (dis_num > 0) {
+    /* Create dispatcher thread */
+    dis_num--;
+  	if (pthread_create(&dispatch_threads,NULL,dispatch,NULL) != 0) {
+  		perror("couldn't create dispatcher thread");
+  	}
+
+  }
+
+  while (work_num > 0) {
+    /* Create worker thread */
+    work_num--;
+  	if (pthread_create(&worker_threads,NULL,worker,NULL) != 0) {
+  		perror("couldn't create worker thread");
+  	}
+
+  }
 
   // Clean up
   return 0;
