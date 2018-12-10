@@ -192,7 +192,7 @@ int readFromDisk(char * request, char * content, int len) {
   // Open and read the contents of file given the request
   FILE * fd = fopen(request, "r");
   if (fd == NULL){
-    perror("failed to ")
+    perror("failed to open the fd");
     return -1;
   }
   int numbytes;
