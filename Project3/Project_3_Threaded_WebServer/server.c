@@ -37,9 +37,16 @@ typedef struct cache_entry {
     char *content;
 } cache_entry_t;
 
+typedef struct cache_queue {
+	  int len, index;
+    cache_entry_t caches[MAX_CE];
+} cache_queue_t;
+
 // globals:
 request_queue_t * request_queue;
-cache_entry_t* cache_queue;
+cache_queue_t * cache_queue;
+int requests_qlen;
+int ce_len;
 pthread_mutex_t dispatch_lock;
 pthread_mutex_t worker_lock;
 pthread_cond_t dispatch_cond_lock;
@@ -54,7 +61,7 @@ pthread_cond_t worker_cond_lock;
 int addIntoRequestQueue(int fd, char* filename){
   // Determines whether adding a new request will exceed the maximum length.
   // Otherwise, adds the new request to the front and update the index parameters.
-  if (request_queue->len >= MAX_queue_len){
+  if (request_queue->len >= requests_qlen){
 	  return -1;
   }
 
@@ -63,7 +70,7 @@ int addIntoRequestQueue(int fd, char* filename){
   strcpy(request_queue->requests[request_queue->back].request,filename);
 
   // request_queue is a queue array implementation. Update back index accordingly.
-  if (request_queue->back = MAX_queue_len) {
+  if (request_queue->back = requests_qlen) {
 	request_queue->back = 0;
   }
   else {
@@ -90,7 +97,7 @@ int takeFromRequestQueue(request_t * request){
   memset(retrieved_request.request, 0, sizeof(retrieved_request.request));
 
   // request_queue is a queue array implementation. Update front index accordingly.
-  if (request_queue->front = MAX_queue_len) {
+  if (request_queue->front = requests_qlen) {
 	request_queue->front = 0;
   }
   else {
@@ -139,8 +146,8 @@ void * dynamic_pool_size_update(void *arg) {
 // Function to check whether the given request is present in cache
 int getCacheIndex(char *request){
   /// return the index if the request is present in the cache
-  for (int i=0; i<MAX_CE; i++){
-	if( strcmp(cache_queue[i].request, request) == 0 ){
+  for (int i=0; i<ce_len; i++){
+	if( strcmp(cache_queue->caches[i].request, request) == 0 ){
       return i;
     }
   }
@@ -151,6 +158,14 @@ int getCacheIndex(char *request){
 void addIntoCache(char *mybuf, char *memory , int memory_size){
   // It should add the request at an index according to the cache replacement policy
   // Make sure to allocate/free memeory when adding or replacing cache entries
+  if(cache_queue->len > ce_len)
+  {
+    cache_queue->index = 0;
+  }
+  cache_queue->caches[cache_queue->index].len = memory_size;
+  strcpy(cache_queue->caches[cache_queue->index].request, mybuf);
+  strcpy(cache_queue->caches[cache_queue->index].content, memory);
+  cache_queue->len++;
 }
 
 // clear the memory allocated to the cache
@@ -162,17 +177,26 @@ void deleteCache(){
 // Function to initialize the cache
 int initCache(){
   // Allocating memory and initializing the cache array.
-  if( (cache_queue = (cache_entry_t *) malloc( MAX_CE * sizeof(cache_entry_t) ) ) == NULL){
-    perror("failed to allocate memory for cache array");
+  if( (cache_queue = (cache_queue_t *) malloc( sizeof(cache_queue_t) )) == NULL){
+    perror("failed to allocate memory for cache queue");
     return -1;
   }
+  cache_queue->len = 0;
+  cache_queue->index = 0;
   return 0;
 }
 
 // Function to open and read the file from the disk into the memory
 // Add necessary arguments as needed
-int readFromDisk(/*necessary arguments*/) {
+int readFromDisk(char * request, char * content, int len) {
   // Open and read the contents of file given the request
+  FILE * fd = fopen(request, "r");
+  if (fd == NULL){
+    perror("failed to ")
+    return -1;
+  }
+  int numbytes;
+  return numbytes;
 }
 
 
@@ -263,6 +287,8 @@ void * worker(void *arg) {
 	long start = getCurrentTimeInMicro();
 
     // Get the request from the queue
+    request_t * request = malloc(sizeof(request_t));
+    int result = takeFromRequestQueue(request);
 
     // Get the data from the disk or the cache
 
@@ -298,8 +324,16 @@ int check_parameters(int parameters[]) {
      printf("port number is out of bound; must be bounded between 1025 and 65535\n");
      return -1;
    }
+   if ((parameters[2]+parameters[3])>MAX_THREADS || (parameters[2]+parameters[3])<0){
+     printf("insufficient number of threads to process the input number of dispatchers and/or workers\n");
+     return -1;
+   }
    if (parameters[4]<0 || parameters[4]>1){
      printf("invalid dynamic_flag; must be 0 or 1\n");
+     return -1;
+   }
+   if (parameters[5]>MAX_queue_len){
+     printf("qlen exceeds the maximum length of the request queue allowed: %d\n", MAX_queue_len);
      return -1;
    }
    if (parameters[6]>MAX_CE){
@@ -339,17 +373,15 @@ int main(int argc, char **argv) {
   }
 
   // Change the current working directory to server root directory
+  if (chdir(path) != 0){
+    printf("path name does not exist or is invalid\n");
+    return -1;
+  }
 
   // Start the server and initialize cache
-  init(port);
-  initRequestQueue();
-  initCache();
-
-  // Create dispatcher and worker threads
-  pthread_t dispatch_threads_pools[num_dispatcher];
-  pthread_t worker_threads_pools[num_workers];
-  pthread_t dispatch_threads, worker_threads;
-
+  // Also initialize thread locks.
+  requests_qlen = qlen;
+  ce_len = cache_entries;
   if ( (pthread_mutex_init(&dispatch_lock, NULL) != 0) || (pthread_mutex_init(&worker_lock, NULL) != 0)){
     printf("mutex init failed\n");
     return -1;
@@ -359,6 +391,19 @@ int main(int argc, char **argv) {
     printf("mutex cond int failed\n");
     return -1;
   }
+  init(port);
+  if (initRequestQueue()!=0){
+    return -1;
+  }
+  if (initCache()!=0){
+    deleteRequestQueue();
+    return -1;
+  }
+
+  // Create dispatcher and worker threads
+  pthread_t dispatch_threads_pools[num_dispatcher];
+  pthread_t worker_threads_pools[num_workers];
+  pthread_t dispatch_threads, worker_threads;
 
   int dis_num = num_dispatcher;
   while (dis_num > 0) {
