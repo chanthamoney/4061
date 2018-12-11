@@ -222,7 +222,6 @@ int initCache(int size){
 // Add necessary arguments as needed
 int readFromDisk(char * request, char * bufferOutput) {
   // Open and read the contents of file given the request
-<<<<<<< HEAD
   char directory[BUFF_SIZE];
   struct stat file; //to get information of the filename
   strcat(directory, request);
@@ -247,12 +246,6 @@ int readFromDisk(char * request, char * bufferOutput) {
     addIntoCache(request, bufferOutput, file.st_size);
 
     return file.st_size; //returns the size of the file
-=======
-  FILE * fd = fopen(request, "r");
-  if (fd == NULL){
-    perror("failed to open the fd");
-    return -1;
->>>>>>> 8ac798c58fd103f8016a697b69b1caf365e6c7dc
   }
 }
 
