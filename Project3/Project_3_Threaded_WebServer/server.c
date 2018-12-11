@@ -18,6 +18,7 @@
 #define MAX_CE 100
 #define INVALID -1
 #define BUFF_SIZE 1024
+#define WAITTIME 1000
 
 
 // structs:
@@ -27,26 +28,25 @@ typedef struct request {
 } request_t;
 
 typedef struct request_queue {
-	  int len, front, back;
+	  int max_len, len, front, back;
     request_t requests[MAX_queue_len];
 } request_queue_t;
 
 typedef struct cache_entry {
     int len;
-    char *request;
+    char request[BUFF_SIZE];
     char *content;
 } cache_entry_t;
 
 typedef struct cache_queue {
-	  int len, index;
+	  int max_len, len, index;
     cache_entry_t caches[MAX_CE];
 } cache_queue_t;
 
 // globals:
 request_queue_t * request_queue;
 cache_queue_t * cache_queue;
-int requests_qlen;
-int ce_len;
+int reqNum;
 pthread_mutex_t dispatch_lock;
 pthread_mutex_t worker_lock;
 pthread_cond_t dispatch_cond_lock;
@@ -61,7 +61,7 @@ pthread_cond_t worker_cond_lock;
 int addIntoRequestQueue(int fd, char* filename){
   // Determines whether adding a new request will exceed the maximum length.
   // Otherwise, adds the new request to the front and update the index parameters.
-  if (request_queue->len >= requests_qlen){
+  if (request_queue->len >= request_queue->max_len){
 	  return -1;
   }
 
@@ -70,13 +70,13 @@ int addIntoRequestQueue(int fd, char* filename){
   strcpy(request_queue->requests[request_queue->back].request,filename);
 
   // request_queue is a queue array implementation. Update back index accordingly.
-  if (request_queue->back = requests_qlen) {
-	request_queue->back = 0;
+  if (request_queue->back = request_queue->max_len) {
+    request_queue->back = 0;
   }
   else {
-	request_queue->back++;
+	  request_queue->back++;
   }
-  request_queue->len++;
+    request_queue->len++;
   return 0;
 }
 
@@ -97,23 +97,24 @@ int takeFromRequestQueue(request_t * request){
   memset(retrieved_request.request, 0, sizeof(retrieved_request.request));
 
   // request_queue is a queue array implementation. Update front index accordingly.
-  if (request_queue->front = requests_qlen) {
-	request_queue->front = 0;
+  if (request_queue->front = request_queue->max_len) {
+    request_queue->front = 0;
   }
   else {
-	request_queue->front++;
+	  request_queue->front++;
   }
   request_queue->len--;
   return 0;
 }
 
 // Function to initialize the request queue
-int initRequestQueue(){
+int initRequestQueue(int size){
   // Allocating memory and initializing the request struct.
   if( (request_queue = (request_queue_t *) malloc( sizeof(request_queue_t) )) == NULL){
     perror("failed to allocate memory for request queue");
     return -1;
   }
+  request_queue->max_len = size;
   request_queue->len = 0;
   request_queue->front = 0;
   request_queue->back = 0;
@@ -146,7 +147,7 @@ void * dynamic_pool_size_update(void *arg) {
 // Function to check whether the given request is present in cache
 int getCacheIndex(char *request){
   /// return the index if the request is present in the cache
-  for (int i=0; i<ce_len; i++){
+  for (int i=0; i<cache_queue->max_len; i++){
 	if( strcmp(cache_queue->caches[i].request, request) == 0 ){
       return i;
     }
@@ -158,45 +159,94 @@ int getCacheIndex(char *request){
 void addIntoCache(char *mybuf, char *memory , int memory_size){
   // It should add the request at an index according to the cache replacement policy
   // Make sure to allocate/free memeory when adding or replacing cache entries
-  if(cache_queue->len > ce_len)
+  if(cache_queue->len > cache_queue->max_len)
   {
     cache_queue->index = 0;
   }
-  cache_queue->caches[cache_queue->index].len = memory_size;
-  strcpy(cache_queue->caches[cache_queue->index].request, mybuf);
-  strcpy(cache_queue->caches[cache_queue->index].content, memory);
-  cache_queue->len++;
+  // --------------------------------------------------------------------------
+  // ---------------------- CACHE ENTRY SLOT IS OCCUPIED ----------------------
+  if (cache_queue->caches[cache_queue->index].len == 0){
+    // Free and reset fields from the old entry.
+    free(cache_queue->caches[cache_queue->index].content);
+    memset(cache_queue->caches[cache_queue->index].content, 0, sizeof(cache_queue->caches[cache_queue->index].content));
+    // Update values.
+    cache_queue->caches[cache_queue->index].len = memory_size;
+    strcpy(cache_queue->caches[cache_queue->index].request, mybuf);
+    // allocate memory for cache memory.
+    cache_queue->caches[cache_queue->index].content = malloc(memory_size);
+    strcpy(cache_queue->caches[cache_queue->index].content, memory);
+    cache_queue->len++;
+  }
+  // --------------------------------------------------------------------------
+  // -------------------- CACHE ENTRY SLOT IS NOT OCCUPIED --------------------
+  else{
+    // Fill in values.
+    cache_queue->caches[cache_queue->index].len = memory_size;
+    strcpy(cache_queue->caches[cache_queue->index].request, mybuf);
+    // allocate memory for cache memory
+    cache_queue->caches[cache_queue->index].content = malloc(memory_size);
+    strcpy(cache_queue->caches[cache_queue->index].content, memory);
+    cache_queue->len++;
+  }
+  // --------------------------------------------------------------------------
 }
 
 // clear the memory allocated to the cache
 void deleteCache(){
   // De-allocate/free the cache memory
+  for (int i=0; i<MAX_CE; i++){
+    if (cache_queue->caches[i].len != 0){
+      free(cache_queue->caches[i].content);
+    }
+  }
   free(cache_queue);
 }
 
 // Function to initialize the cache
-int initCache(){
+int initCache(int size){
   // Allocating memory and initializing the cache array.
   if( (cache_queue = (cache_queue_t *) malloc( sizeof(cache_queue_t) )) == NULL){
     perror("failed to allocate memory for cache queue");
     return -1;
   }
+  cache_queue->max_len = size;
   cache_queue->len = 0;
   cache_queue->index = 0;
+  for (int i = 0; i<MAX_CE; i++){
+    cache_queue->caches[i].len = 0;
+	}
   return 0;
 }
 
 // Function to open and read the file from the disk into the memory
 // Add necessary arguments as needed
-int readFromDisk(char * request, char * content, int len) {
+int readFromDisk(char * request, char * bufferOutput) {
   // Open and read the contents of file given the request
-  FILE * fd = fopen(request, "r");
-  if (fd == NULL){
-    perror("failed to ")
-    return -1;
+  char directory[BUFF_SIZE];
+  struct stat file; //to get information of the filename
+  strcat(directory, request);
+  getcwd(directory, 1024); //what is the size of the directory?
+
+  if(stat(directory, &file) < 0){
+    perror("Error, finding the file.");
+    exit(-1);
   }
-  int numbytes;
-  return numbytes;
+  else{
+    FILE *fileOP;
+    fileOP = fopen(directory, "r");
+
+    if(fileOP == NULL){
+      perror("CAN'T OPEN FILE.");
+      exit(-1);
+    }
+
+    bufferOutput = malloc(sizeof(file.st_size));
+    fread(bufferOutput, file.st_size, 1, fileOP);
+    // add this to cache
+    addIntoCache(request, bufferOutput, file.st_size);
+
+    return file.st_size; //returns the size of the file
+  }
 }
 
 
@@ -272,8 +322,9 @@ void * dispatch(void *arg) {
 	pthread_mutex_unlock(&dispatch_lock);
 	// ----------------------------------
 
-   }
-   return NULL;
+  usleep(WAITTIME);
+  }
+  return NULL;
 }
 
 /**********************************************************************************/
@@ -281,25 +332,77 @@ void * dispatch(void *arg) {
 // Function to retrieve the request from the queue, process it and then return a result to the client
 void * worker(void *arg) {
 
-   while (1) {
+  int threadId = pthread_self();
+
+  int fd;
+  char * content;
+  char content_type[BUFF_SIZE];
+  char request_path[BUFF_SIZE];
+  char cache_status[BUFF_SIZE];
+  int bytes;
+  long total_time;
+
+  while (1) {
+
+    // Clean up variables.
+    memset(content, 0, sizeof(content));
+    memset(content_type, 0, sizeof(content_type));
+    memset(request_path, 0, sizeof(request_path));
+    memset(cache_status, 0, sizeof(cache_status));
 
     // Start recording time
-	long start = getCurrentTimeInMicro();
+    long start = getCurrentTimeInMicro();
 
     // Get the request from the queue
+    // ------------- LOCK -------------
+    pthread_mutex_lock(&worker_lock);
+    // --------------------------------
+    while(request_queue->len <= 0){
+      // when there are no requests in queue, wait.
+      pthread_cond_wait(&worker_cond_lock, &worker_lock);
+    }
     request_t * request = malloc(sizeof(request_t));
-    int result = takeFromRequestQueue(request);
+    if(takeFromRequestQueue(request) < 0){
+      // if failed to take from queue, reset and try again.
+      free(request);
+      perror("Fail to get a request from the queue");
+      continue;
+    }
+    pthread_cond_signal(&dispatch_cond_lock);
+    // ------------- UNLOCK -------------
+    pthread_mutex_unlock(&worker_lock);
+    // ----------------------------------
+
+    // extract fd and content from the request.
+    fd = request->fd;
+    strcpy(request_path, request->request);
+    strcpy(content_type, getContentType(request->request));
 
     // Get the data from the disk or the cache
+    int cacheIndex = getCacheIndex(request_path);
+    if (cacheIndex < 0) {
+      // request is not in cache, so read from disk.
+      bytes = readFromDisk(request_path, content);
+      strcpy(cache_status, "MISS");
+    }
+    else{
+      bytes = cache_queue->caches[cacheIndex].len;
+      strcpy(content, cache_queue->caches[cacheIndex].content);
+      strcpy(cache_status, "HIT");
+    }
 
     // Stop recording the time
-	long end = getCurrentTimeInMicro();
-	long total_time = end - start;
+    long end = getCurrentTimeInMicro();
+    total_time = end - start;
 
     // Log the request into the file and terminal
+    printf("[%d][%d][%d][%s][%d][%ld][%s]\n", threadId,reqNum,fd,request_path,bytes,total_time,cache_status);
 
     // return the result
+    int errors = return_result(fd, content_type, content, bytes);
+    free(content);
 
+    usleep(WAITTIME);
   }
   return NULL;
 }
@@ -330,6 +433,7 @@ int check_parameters(int parameters[]) {
    }
    if (parameters[4]<0 || parameters[4]>1){
      printf("invalid dynamic_flag; must be 0 or 1\n");
+     printf("(NOT IMPLEMENTED YET)\n");
      return -1;
    }
    if (parameters[5]>MAX_queue_len){
@@ -342,6 +446,18 @@ int check_parameters(int parameters[]) {
    }
 
    return 0;
+}
+
+/**********************************************************************************/
+
+void handle_sigint(int sig)
+{
+  pthread_mutex_destroy(&dispatch_lock);
+  pthread_cond_destroy(&dispatch_cond_lock);
+  pthread_mutex_destroy(&worker_lock);
+  pthread_cond_destroy(&worker_cond_lock);
+  deleteRequestQueue();
+  deleteCache();
 }
 
 /**********************************************************************************/
@@ -366,11 +482,13 @@ int main(int argc, char **argv) {
   cache_entries = atoi(argv[7]);
 
   // Perform error checks on the input arguments
-  int parameters[] = {port, num_dispatcher, num_workers, dynamic_flag, qlen, cache_entries};
+  int parameters[] = {port, 1, num_dispatcher, num_workers, dynamic_flag, qlen, cache_entries};
+  /*
   if (check_parameters(parameters) < 0){
     // relevant print error statements are achieved in check_parameters()
     return -1;
   }
+  */
 
   // Change the current working directory to server root directory
   if (chdir(path) != 0){
@@ -380,8 +498,7 @@ int main(int argc, char **argv) {
 
   // Start the server and initialize cache
   // Also initialize thread locks.
-  requests_qlen = qlen;
-  ce_len = cache_entries;
+  reqNum = num_workers;
   if ( (pthread_mutex_init(&dispatch_lock, NULL) != 0) || (pthread_mutex_init(&worker_lock, NULL) != 0)){
     printf("mutex init failed\n");
     return -1;
@@ -392,10 +509,10 @@ int main(int argc, char **argv) {
     return -1;
   }
   init(port);
-  if (initRequestQueue()!=0){
+  if (initRequestQueue(qlen)!=0){
     return -1;
   }
-  if (initCache()!=0){
+  if (initCache(cache_entries)!=0){
     deleteRequestQueue();
     return -1;
   }
@@ -423,12 +540,12 @@ int main(int argc, char **argv) {
   	}
   }
 
-  // Clean up
-  pthread_mutex_destroy(&dispatch_lock);
-  pthread_cond_destroy(&dispatch_cond_lock);
-  pthread_mutex_destroy(&worker_lock);
-  pthread_cond_destroy(&worker_cond_lock);
-  deleteRequestQueue();
-  deleteCache();
+  // Let the server run indefinitely until INT_SIG arrives
+  signal(SIGINT, handle_sigint); // sets up signal hander.
+  while(1){
+    // Clean up when server is interrupted.
+    usleep(WAITTIME);
+  }
+
   return 0;
 }

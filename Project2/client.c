@@ -11,10 +11,18 @@
 #include <sys/socket.h>
 #include "comm.h"
 #include "util.h"
+#include <signal.h>
+
+/* -------------------------client signal handling ----------------------*/
+
+void handle_sigint(int sig)
+{
+    printf("Caught signal %d\n", sig);
+}
 
 /* -------------------------Main function for the client ----------------------*/
 void main(int argc, char * argv[]) {
-
+	signal(SIGINT, handle_sigint);
 	if (argc < 2)
 	{
 		printf("Missing username\n");
