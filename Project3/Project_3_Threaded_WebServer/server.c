@@ -12,6 +12,7 @@
 #include "util.h"
 #include <stdbool.h>
 #include <unistd.h>
+#include <signal.h>
 
 #define MAX_THREADS 100
 #define MAX_queue_len 100
@@ -332,7 +333,7 @@ void * dispatch(void *arg) {
 // Function to retrieve the request from the queue, process it and then return a result to the client
 void * worker(void *arg) {
 
-  int threadId = pthread_self();
+  pthread_t threadId = pthread_self();
 
   int fd;
   char * content;
@@ -344,8 +345,9 @@ void * worker(void *arg) {
 
   while (1) {
 
+    printf("worker created: %d\n", threadId);
+
     // Clean up variables.
-    memset(content, 0, sizeof(content));
     memset(content_type, 0, sizeof(content_type));
     memset(request_path, 0, sizeof(request_path));
     memset(cache_status, 0, sizeof(cache_status));
@@ -452,17 +454,21 @@ int check_parameters(int parameters[]) {
 
 void handle_sigint(int sig)
 {
+  printf("Stopping server...\n");
   pthread_mutex_destroy(&dispatch_lock);
   pthread_cond_destroy(&dispatch_cond_lock);
   pthread_mutex_destroy(&worker_lock);
   pthread_cond_destroy(&worker_cond_lock);
   deleteRequestQueue();
   deleteCache();
+  exit(0);
 }
 
 /**********************************************************************************/
 
 int main(int argc, char **argv) {
+
+  signal(SIGINT, handle_sigint); // sets up signal hander.
 
   // Error check on number of arguments
   if(argc != 8){
@@ -541,7 +547,6 @@ int main(int argc, char **argv) {
   }
 
   // Let the server run indefinitely until INT_SIG arrives
-  signal(SIGINT, handle_sigint); // sets up signal hander.
   while(1){
     // Clean up when server is interrupted.
     usleep(WAITTIME);
