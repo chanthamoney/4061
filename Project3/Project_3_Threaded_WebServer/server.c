@@ -48,10 +48,8 @@ typedef struct cache_queue {
 request_queue_t * request_queue;
 cache_queue_t * cache_queue;
 
-pthread_mutex_t dispatch_lock;
-pthread_mutex_t worker_lock;
-pthread_cond_t dispatch_cond_lock;
-pthread_cond_t worker_cond_lock;
+pthread_mutex_t dispatch_lock, worker_lock, cache_lock;
+pthread_cond_t dispatch_cond_lock, worker_cond_lock;
 
 pthread_t dispatch_threads_pools[MAX_THREADS];
 pthread_t worker_threads_pools[MAX_THREADS];
@@ -235,7 +233,7 @@ int readFromDisk(char * request) {
 
   if(stat(directory, &file) < 0){
     perror("Error, finding the file.");
-    exit(-1);
+    return -1;
   }
   else{
     FILE *fileOP;
@@ -243,12 +241,11 @@ int readFromDisk(char * request) {
 
     if(fileOP == NULL){
       perror("CAN'T OPEN FILE.");
-      exit(-1);
+      return -1;
     }
 
     char * bufferOutput = malloc(sizeof(file.st_size));
-    //fread(bufferOutput, file.st_size, 1, fileOP);
-    fread(bufferOutput, 1, file.st_size, fileOP);
+    fread(bufferOutput, file.st_size, 1, fileOP);
     // add this to cache
     addIntoCache(request, bufferOutput, file.st_size);
     free(bufferOutput);
@@ -362,12 +359,12 @@ void * worker(void *arg) {
     memset(cache_status, 0, sizeof(cache_status));
 
     // Start recording time
-    long start = getCurrentTimeInMicro();
-
-    // Get the request from the queue
     // ------------- LOCK -------------
     pthread_mutex_lock(&worker_lock);
     // --------------------------------
+    long start = getCurrentTimeInMicro();
+
+    // Get the request from the queue
     while(request_queue->len <= 0){
       // when there are no requests in queue, wait.
       pthread_cond_wait(&worker_cond_lock, &worker_lock);
@@ -390,6 +387,9 @@ void * worker(void *arg) {
     strcpy(content_type, getContentType(request->request));
 
     // Get the data from the disk or the cache
+    // ------------- LOCK -------------
+    pthread_mutex_lock(&cache_lock);
+    // --------------------------------
     int cacheIndex = getCacheIndex(request_path);
     if (cacheIndex < 0) {
       // request is not in cache, so read from disk.
@@ -402,15 +402,28 @@ void * worker(void *arg) {
       strcpy(cache_status, "HIT");
     }
     content = cache_queue->caches[cacheIndex].content;
+    // ------------- UNLOCK -------------
+    pthread_mutex_unlock(&cache_lock);
+    // ----------------------------------
 
     // Stop recording the time
     long end = getCurrentTimeInMicro();
     total_time = end - start;
 
     // Log the request into the file and terminal
-    printf("[%d][%d][%d][%s][%d][%ld][%s]\n",threadId,reqNum,fd,request_path,bytes,total_time,cache_status);
     // return the result
-    return_result(fd, content_type, content, bytes);
+
+    if (bytes <= 0){
+      char error[BUFF_SIZE];
+      return_error(fd, error);
+      printf("[%d][%d][%d][%s][%s][%ldms][%s]\n",threadId,reqNum,fd,request_path,error,total_time,cache_status);
+    }
+    else{
+      return_result(fd, content_type, content, bytes);
+      printf("[%d][%d][%d][%s][%d][%ldms][%s]\n",threadId,reqNum,fd,request_path,bytes,total_time,cache_status);
+    }
+
+    // free and reset helper variables.
     free(request);
 
     usleep(WAITTIME);
@@ -479,6 +492,7 @@ void handle_sigint(int sig)
   pthread_cond_destroy(&dispatch_cond_lock);
   pthread_mutex_destroy(&worker_lock);
   pthread_cond_destroy(&worker_cond_lock);
+  pthread_mutex_destroy(&cache_lock);
   deleteRequestQueue();
   deleteCache();
   printf("Server stopped\n");
@@ -489,7 +503,7 @@ void handle_sigint(int sig)
 
 int main(int argc, char **argv) {
 
-  signal(SIGINT, handle_sigint); // sets up signal hander.
+  signal(SIGINT, handle_sigint); // sets up signal hander
 
   // Error check on number of arguments
   if(argc != 8){
@@ -524,7 +538,7 @@ int main(int argc, char **argv) {
   // Start the server and initialize cache
   // Also initialize thread locks.
   reqNum = num_workers;
-  if ( (pthread_mutex_init(&dispatch_lock, NULL) != 0) || (pthread_mutex_init(&worker_lock, NULL) != 0)){
+  if ( (pthread_mutex_init(&dispatch_lock, NULL) != 0) || (pthread_mutex_init(&worker_lock, NULL) != 0) || (pthread_mutex_init(&cache_lock, NULL) != 0) ){
     printf("mutex init failed\n");
     return -1;
   }
