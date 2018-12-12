@@ -47,13 +47,17 @@ typedef struct cache_queue {
 // globals:
 request_queue_t * request_queue;
 cache_queue_t * cache_queue;
-int reqNum;
+
 pthread_mutex_t dispatch_lock;
 pthread_mutex_t worker_lock;
 pthread_cond_t dispatch_cond_lock;
 pthread_cond_t worker_cond_lock;
 
-int run = 0;
+pthread_t dispatch_threads_pools[MAX_THREADS];
+pthread_t worker_threads_pools[MAX_THREADS];
+
+int reqNum;
+int main_server_is_running = 1;
 
 
 /**********************************************************************************/
@@ -162,15 +166,13 @@ int getCacheIndex(char *request){
 void addIntoCache(char *mybuf, char *memory , int memory_size){
   // It should add the request at an index according to the cache replacement policy
   // Make sure to allocate/free memeory when adding or replacing cache entries
-  printf("  Adding into cache...\n");
-  if(cache_queue->index > cache_queue->max_len)
+  if(cache_queue->index >= cache_queue->max_len)
   {
     cache_queue->index = 0;
   }
   // --------------------------------------------------------------------------
   // ---------------------- CACHE ENTRY SLOT IS OCCUPIED ----------------------
   if (cache_queue->caches[cache_queue->index].len != 0){
-    printf("  CACHE ENTRY SLOT IS OCCUPIED\n");
     // Free and reset fields from the old entry.
     free(cache_queue->caches[cache_queue->index].content);
     memset(cache_queue->caches[cache_queue->index].request, 0, sizeof(cache_queue->caches[cache_queue->index].request));
@@ -185,7 +187,6 @@ void addIntoCache(char *mybuf, char *memory , int memory_size){
   // --------------------------------------------------------------------------
   // -------------------- CACHE ENTRY SLOT IS NOT OCCUPIED --------------------
   else{
-    printf("  CACHE ENTRY SLOT IS NOT OCCUPIED\n");
     // Fill in values.
     cache_queue->caches[cache_queue->index].len = memory_size;
     strcpy(cache_queue->caches[cache_queue->index].request, mybuf);
@@ -194,7 +195,6 @@ void addIntoCache(char *mybuf, char *memory , int memory_size){
     strcpy(cache_queue->caches[cache_queue->index].content, memory);
     cache_queue->index++;
   }
-  printf("  SUCCESSFUL ADD INTO CACHE QUEUE\n");
   // --------------------------------------------------------------------------
 }
 
@@ -265,29 +265,23 @@ int readFromDisk(char * request) {
 char* getContentType(char * mybuf) {
   // Should return the content type based on the file type in the request
   // (See Section 5 in Project description for more details)
-   printf("\nMy buff:%s\n", mybuf);
    static char contentType[BUFF_SIZE]; //will return this
    const char ch = '.';
    char *str = strrchr(mybuf, ch); //get information after the .
-   printf("\nMy new char:%s\n", str);
    if( (strcmp(str, ".htm") == 0) || (strcmp(str, ".html") == 0)){
      strcpy(contentType, "text/html");
-     printf("\nContent Type:%s\n", contentType);
      return contentType;
    }
    else if(strcmp(str, ".jpg") == 0){
      strcpy(contentType, "image/jpeg");
-     printf("\nContent Type:%s\n", contentType);
      return contentType;
    }
    else if (strcmp(str, ".gif") == 0){
      strcpy(contentType, "image/gif");
-     printf("\nContent Type:%s\n", contentType);
      return contentType;
    }
    else{
      strcpy(contentType, ".text/plain");
-     printf("\nContent Type:%s\n", contentType);
      return contentType;
    }
 }
@@ -305,9 +299,7 @@ long getCurrentTimeInMicro() {
 // Function to receive the request from the client and add to the queue
 void * dispatch(void *arg) {
 
-  printf("  DISPATCHER CREATED\n");
-
-  while (run) {
+  while (main_server_is_running) {
 
     // Accept client connection
 	int fd = accept_connection();
@@ -337,8 +329,6 @@ void * dispatch(void *arg) {
 	pthread_mutex_unlock(&dispatch_lock);
 	// ----------------------------------
 
-  printf("  DISPATCHER ADDED INTO REQUEST QUEUE\n");
-
   usleep(WAITTIME);
   }
   return NULL;
@@ -349,8 +339,12 @@ void * dispatch(void *arg) {
 // Function to retrieve the request from the queue, process it and then return a result to the client
 void * worker(void *arg) {
 
-  pthread_t threadId = pthread_self();
-  printf("  WORKER CREATED\n");
+  int threadId = 0;
+  for (int i=0; i<MAX_THREADS; i++){
+    if (pthread_self() == worker_threads_pools[i]){
+      threadId = i;
+    }
+  }
 
   int fd;
   char * content;
@@ -360,7 +354,7 @@ void * worker(void *arg) {
   int bytes;
   long total_time;
 
-  while (run) {
+  while (main_server_is_running) {
 
     // Clean up variables.
     memset(content_type, 0, sizeof(content_type));
@@ -390,22 +384,17 @@ void * worker(void *arg) {
     pthread_mutex_unlock(&worker_lock);
     // ----------------------------------
 
-    printf("  WORKER TOOK FROM REQUEST QUEUE\n");
-
     // extract fd and content from the request.
     fd = request->fd;
     strcpy(request_path, request->request);
-    printf("  STEP #0\n");
     strcpy(content_type, getContentType(request->request));
-
-    printf("  STEP #1\n");
 
     // Get the data from the disk or the cache
     int cacheIndex = getCacheIndex(request_path);
-    printf("  STEP #2\n");
     if (cacheIndex < 0) {
       // request is not in cache, so read from disk.
       bytes = readFromDisk(request_path);
+      cacheIndex = cache_queue->index - 1;
       strcpy(cache_status, "MISS");
     }
     else{
@@ -414,17 +403,14 @@ void * worker(void *arg) {
     }
     content = cache_queue->caches[cacheIndex].content;
 
-    printf("  CACHING SUCCESSFUL\n");
-
     // Stop recording the time
     long end = getCurrentTimeInMicro();
     total_time = end - start;
 
     // Log the request into the file and terminal
-    printf("[%ld][%d][%d][%s][%d][%ld][%s]\n", threadId,reqNum,fd,request_path,bytes,total_time,cache_status);
-
+    printf("[%d][%d][%d][%s][%d][%ld][%s]\n",threadId,reqNum,fd,request_path,bytes,total_time,cache_status);
     // return the result
-    int errors = return_result(fd, content_type, content, bytes);
+    return_result(fd, content_type, content, bytes);
     free(request);
 
     usleep(WAITTIME);
@@ -441,7 +427,7 @@ int check_parameters(int parameters[]) {
 
    // Check if atoi() succeeded.
    for (int i = 0; i < 7; i++){
-     if (parameters[i]==0 && strcmp(parameter_type[i+1],"0")!=0){
+     if (parameters[i]==0 && i!=4){
        printf("invalid parameter: %s\n", parameter_type[i]);
        return -1;
      }
@@ -452,8 +438,12 @@ int check_parameters(int parameters[]) {
      printf("port number is out of bound; must be bounded between 1025 and 65535\n");
      return -1;
    }
-   if ((parameters[2]+parameters[3])>MAX_THREADS || (parameters[2]+parameters[3])<0){
-     printf("insufficient number of threads to process the input number of dispatchers and/or workers\n");
+   if ((parameters[2]>MAX_THREADS) || (parameters[2]<0)){
+     printf("insufficient/invalid number of threads to process the input number of dispatchers\n");
+     return -1;
+   }
+   if ((parameters[3]>MAX_THREADS) || (parameters[3]<0)){
+     printf("insufficient/invalid number of threads to process the input number of workers\n");
      return -1;
    }
    if (parameters[4]<0 || parameters[4]>1){
@@ -477,14 +467,21 @@ int check_parameters(int parameters[]) {
 
 void handle_sigint(int sig)
 {
-  printf("Stopping server...\n");
-  run = -1;
+  printf("\nStopping server...\n");
+  main_server_is_running = -1;
+  for (int i=0; i<MAX_THREADS; i++){
+    pthread_cancel(dispatch_threads_pools[i]);
+  }
+  for (int j=0; j<MAX_THREADS; j++){
+    pthread_cancel(worker_threads_pools[j]);
+  }
   pthread_mutex_destroy(&dispatch_lock);
   pthread_cond_destroy(&dispatch_cond_lock);
   pthread_mutex_destroy(&worker_lock);
   pthread_cond_destroy(&worker_cond_lock);
   deleteRequestQueue();
   deleteCache();
+  printf("Server stopped\n");
   exit(0);
 }
 
@@ -513,12 +510,10 @@ int main(int argc, char **argv) {
 
   // Perform error checks on the input arguments
   int parameters[] = {port, 1, num_dispatcher, num_workers, dynamic_flag, qlen, cache_entries};
-  /*
   if (check_parameters(parameters) < 0){
     // relevant print error statements are achieved in check_parameters()
     return -1;
   }
-  */
 
   // Change the current working directory to server root directory
   if (chdir(path) != 0){
@@ -548,8 +543,8 @@ int main(int argc, char **argv) {
   }
 
   // Create dispatcher and worker threads
-  pthread_t dispatch_threads_pools[num_dispatcher];
-  pthread_t worker_threads_pools[num_workers];
+  //pthread_t dispatch_threads_pools[num_dispatcher];
+  //pthread_t worker_threads_pools[num_workers];
   pthread_t dispatch_threads, worker_threads;
 
   int dis_num = num_dispatcher;
@@ -557,22 +552,24 @@ int main(int argc, char **argv) {
   while (dis_num > 0) {
     /* Create dispatcher thread */
     dis_num--;
-  	if (dispatch_threads_pools[i++] = pthread_create(&dispatch_threads,NULL,dispatch,NULL) != 0) {
+  	if (pthread_create(&dispatch_threads_pools[i],NULL,dispatch,NULL) != 0) {
   		perror("couldn't create dispatcher thread");
   	}
+    i++;
   }
-  int j = 0;
   int work_num = num_workers;
+  int j = 0;
   while (work_num > 0) {
     /* Create worker thread */
     work_num--;
-  	if (worker_threads_pools[j++] = pthread_create(&worker_threads,NULL,worker,NULL) != 0) {
+  	if (pthread_create(&worker_threads_pools[j],NULL,worker,NULL) != 0) {
   		perror("couldn't create worker thread");
   	}
+    j++;
   }
 
-  // Let the server run indefinitely until INT_SIG arrives
-  while(1){
+  // Let the server run indefinitely until INTSIG arrives
+  while(main_server_is_running){
     // Clean up when server is interrupted.
     usleep(WAITTIME);
   }
