@@ -53,6 +53,8 @@ pthread_mutex_t worker_lock;
 pthread_cond_t dispatch_cond_lock;
 pthread_cond_t worker_cond_lock;
 
+int run = 0;
+
 
 /**********************************************************************************/
 
@@ -171,7 +173,7 @@ void addIntoCache(char *mybuf, char *memory , int memory_size){
     printf("  CACHE ENTRY SLOT IS OCCUPIED\n");
     // Free and reset fields from the old entry.
     free(cache_queue->caches[cache_queue->index].content);
-    memset(cache_queue->caches[cache_queue->index].content, 0, sizeof(cache_queue->caches[cache_queue->index].content));
+    memset(cache_queue->caches[cache_queue->index].request, 0, sizeof(cache_queue->caches[cache_queue->index].request));
     // Update values.
     cache_queue->caches[cache_queue->index].len = memory_size;
     strcpy(cache_queue->caches[cache_queue->index].request, mybuf);
@@ -303,7 +305,9 @@ long getCurrentTimeInMicro() {
 // Function to receive the request from the client and add to the queue
 void * dispatch(void *arg) {
 
-  while (1) {
+  printf("  DISPATCHER CREATED\n");
+
+  while (run) {
 
     // Accept client connection
 	int fd = accept_connection();
@@ -346,6 +350,7 @@ void * dispatch(void *arg) {
 void * worker(void *arg) {
 
   pthread_t threadId = pthread_self();
+  printf("  WORKER CREATED\n");
 
   int fd;
   char * content;
@@ -355,7 +360,7 @@ void * worker(void *arg) {
   int bytes;
   long total_time;
 
-  while (1) {
+  while (run) {
 
     // Clean up variables.
     memset(content_type, 0, sizeof(content_type));
@@ -473,6 +478,7 @@ int check_parameters(int parameters[]) {
 void handle_sigint(int sig)
 {
   printf("Stopping server...\n");
+  run = -1;
   pthread_mutex_destroy(&dispatch_lock);
   pthread_cond_destroy(&dispatch_cond_lock);
   pthread_mutex_destroy(&worker_lock);
@@ -542,24 +548,25 @@ int main(int argc, char **argv) {
   }
 
   // Create dispatcher and worker threads
-  //pthread_t dispatch_threads_pools[num_dispatcher];
-  //pthread_t worker_threads_pools[num_workers];
+  pthread_t dispatch_threads_pools[num_dispatcher];
+  pthread_t worker_threads_pools[num_workers];
   pthread_t dispatch_threads, worker_threads;
 
   int dis_num = num_dispatcher;
+  int i = 0;
   while (dis_num > 0) {
     /* Create dispatcher thread */
     dis_num--;
-  	if (pthread_create(&dispatch_threads,NULL,dispatch,NULL) != 0) {
+  	if (dispatch_threads_pools[i++] = pthread_create(&dispatch_threads,NULL,dispatch,NULL) != 0) {
   		perror("couldn't create dispatcher thread");
   	}
   }
-
+  int j = 0;
   int work_num = num_workers;
   while (work_num > 0) {
     /* Create worker thread */
     work_num--;
-  	if (pthread_create(&worker_threads,NULL,worker,NULL) != 0) {
+  	if (worker_threads_pools[j++] = pthread_create(&worker_threads,NULL,worker,NULL) != 0) {
   		perror("couldn't create worker thread");
   	}
   }
