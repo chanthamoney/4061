@@ -75,7 +75,7 @@ int addIntoRequestQueue(int fd, char* filename){
   strcpy(request_queue->requests[request_queue->back].request,filename);
 
   // request_queue is a queue array implementation. Update back index accordingly.
-  if (request_queue->back = request_queue->max_len) {
+  if (request_queue->back + 1 >= request_queue->max_len) {
     request_queue->back = 0;
   }
   else {
@@ -102,7 +102,7 @@ int takeFromRequestQueue(request_t * request){
   memset(retrieved_request.request, 0, sizeof(retrieved_request.request));
 
   // request_queue is a queue array implementation. Update front index accordingly.
-  if (request_queue->front = request_queue->max_len) {
+  if (request_queue->front + 1 >= request_queue->max_len) {
     request_queue->front = 0;
   }
   else {
@@ -423,7 +423,7 @@ void * worker(void *arg) {
       printf("[%d][%d][%d][%s][%d][%ldms][%s]\n",threadId,reqNum,fd,request_path,bytes,total_time,cache_status);
     }
 
-    // free and reset helper variables.
+    // free and reset local helper variables.
     free(request);
 
     usleep(WAITTIME);
