@@ -67,9 +67,8 @@ int addIntoRequestQueue(int fd, char* filename){
   // Determines whether adding a new request will exceed the maximum length.
   // Otherwise, adds the new request to the front and update the index parameters.
   if (request_queue->len >= request_queue->max_len){
-	  return -1;
+	  return -1; //TODO: conditional for reaching max length
   }
-
   // Put the request into the queue by filling the request fields with the parameters.
   request_queue->requests[request_queue->back].fd = fd;
   strcpy(request_queue->requests[request_queue->back].request,filename);
@@ -81,7 +80,8 @@ int addIntoRequestQueue(int fd, char* filename){
   else {
 	  request_queue->back++;
   }
-    request_queue->len++;
+  request_queue->len++;
+
   return 0;
 }
 
@@ -238,18 +238,19 @@ int readFromDisk(char * request) {
   else{
     FILE *fileOP;
     fileOP = fopen(directory, "r");
-
     if(fileOP == NULL){
       perror("CAN'T OPEN FILE.");
       return -1;
     }
-
-    char * bufferOutput = malloc(sizeof(file.st_size));
-    fread(bufferOutput, file.st_size, 1, fileOP);
+    int fileSize = file.st_size;
+    char * bufferOutput = (char *) malloc(fileSize);
+    printf("\nHere is:%ld\n ", file.st_size);
+    fread(bufferOutput, 1, file.st_size, fileOP);
+    printf("READING");
     // add this to cache
     addIntoCache(request, bufferOutput, file.st_size);
-    free(bufferOutput);
 
+    fclose(fileOP);
     return file.st_size; //returns the size of the file
   }
 }
