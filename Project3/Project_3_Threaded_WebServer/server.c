@@ -30,7 +30,7 @@ typedef struct request {
 
 typedef struct request_queue {
 	  int max_len, len, front, back;
-    request_t requests[MAX_queue_len];
+    request_t requests[MAX_queue_len + 1];
 } request_queue_t;
 
 typedef struct cache_entry {
@@ -74,7 +74,7 @@ int addIntoRequestQueue(int fd, char* filename){
   strcpy(request_queue->requests[request_queue->back].request,filename);
 
   // request_queue is a queue array implementation. Update back index accordingly.
-  if (request_queue->back + 1 >= request_queue->max_len) {
+  if (request_queue->back >= request_queue->max_len) {
     request_queue->back = 0;
   }
   else {
@@ -102,7 +102,7 @@ int takeFromRequestQueue(request_t * request){
   memset(retrieved_request.request, 0, sizeof(retrieved_request.request));
 
   // request_queue is a queue array implementation. Update front index accordingly.
-  if (request_queue->front + 1 >= request_queue->max_len) {
+  if (request_queue->front >= request_queue->max_len) {
     request_queue->front = 0;
   }
   else {
@@ -178,7 +178,7 @@ void addIntoCache(char *mybuf, char *memory , int memory_size){
     cache_queue->caches[cache_queue->index].len = memory_size;
     strcpy(cache_queue->caches[cache_queue->index].request, mybuf);
     // allocate memory for cache memory.
-    cache_queue->caches[cache_queue->index].content = malloc(memory_size);
+    cache_queue->caches[cache_queue->index].content = malloc(memory_size + 1000);
     strcpy(cache_queue->caches[cache_queue->index].content, memory);
     cache_queue->index++;
   }
@@ -189,7 +189,7 @@ void addIntoCache(char *mybuf, char *memory , int memory_size){
     cache_queue->caches[cache_queue->index].len = memory_size;
     strcpy(cache_queue->caches[cache_queue->index].request, mybuf);
     // allocate memory for cache memory
-    cache_queue->caches[cache_queue->index].content = malloc(memory_size);
+    cache_queue->caches[cache_queue->index].content = malloc(memory_size + 1000);
     strcpy(cache_queue->caches[cache_queue->index].content, memory);
     cache_queue->index++;
   }
